@@ -201,8 +201,23 @@ three toolchain paths, then runs
 msbuild BrowserForWP.sln /nologo /v:minimal /p:Configuration=Debug /p:Platform=ARM
 ```
 
-and prints `=== BUILD_EXIT=<n> ===`. Extra arguments are forwarded, so
-`tools\vm-build.cmd /t:Rebuild` performs a clean build.
+prints a diagnostic summary, and finishes with `=== BUILD_EXIT=<n> ===`. Extra
+arguments are forwarded, so `tools\vm-build.cmd /t:Rebuild` performs a clean
+build.
+
+**The script decides pass/fail, and it is stricter than MSBuild.** It exits
+non-zero if an `error BC`, `error MSB` or `error APPX` line appears in the log,
+even when MSBuild itself returns 0, and it reports the one allow-listed
+diagnostic (`WMC9999`) by name. A clean exit code is therefore a statement about
+the log, not merely about MSBuild's opinion of it.
+
+Both halves of that are verified, not asserted:
+
+- a normal run prints `known-noise: WMC9999 (allowed, ...)`, `Real compiler
+errors: none` and `=== BUILD_EXIT=0 ===`;
+- a deliberate `Return "this is not an Integer"` in a function returning `Integer`
+  prints `UNEXPECTED COMPILER ERRORS` and `=== BUILD_EXIT=1 ===`. A checker that
+  has never been observed to fail is not a checker.
 
 **Quoting is load-bearing.** `prlctl exec` takes the command and its arguments as
 SEPARATE argv entries. `prlctl exec <vm> "cmd /c ver"` fails *silently*, because
