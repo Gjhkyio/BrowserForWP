@@ -1,6 +1,6 @@
 ' BrowserForWP — persisted history (pure, no WinRT dependency).
 '
-' Bounded to 200 entries; newest last. Serialization is one entry per line:
+' Bounded to 100 entries; newest last. Serialization is one entry per line:
 ' ticks + "|" + url + "|" + title (pipes in fields are stripped).
 
 Imports System.Collections.Generic
@@ -44,8 +44,14 @@ Namespace Storage
             End While
         End Sub
 
+        ''' <summary>
+        ''' A snapshot copy. List(Of T).AsReadOnly() does not exist in the
+        ''' ".NET for Windows Store apps" profile -- ReadOnlyCollection(Of T) is not
+        ''' part of it -- so that call fails as BC30456 rather than degrading.
+        ''' Copying is the profile-safe equivalent, and it is what the build proved.
+        ''' </summary>
         Public Function List() As IList(Of HistoryEntry)
-            Return _entries.AsReadOnly()
+            Return New List(Of HistoryEntry)(_entries)
         End Function
 
         Public Sub Clear()
