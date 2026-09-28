@@ -23,7 +23,7 @@ project's ambition.
 | Ship the **Firefox / Gecko** engine | Mozilla cancelled Firefox for Windows Phone in 2015. No binary ever shipped. | Same pluggable abstraction as above. |
 | **TLS 1.3** | Schannel on WP8.1 tops out at **TLS 1.2**, and the OS offers no API to raise it. | **Implemented from the RFCs, in managed code, on-device**: a complete TLS 1.3 client (`BrowserForWP.Net`) running over a raw `StreamSocket`, so the app's own network layer speaks TLS 1.3 today. |
 | **Modern HTTPS** | The system `WebView` negotiates whatever Schannel supports. | `Tls13Client` + DNS-over-HTTPS resolver + certificate pinning for the app's transport layer. |
-| **Modern web pages** | IE11 cannot parse or run modern JavaScript. | An on-device ES5 compatibility bundle (`BrowserForWP.Polyfill`) plus a compatibility diagnostic that tells you *why* a given site failed. **The injection step is not written yet** — the bundle is packaged into the app but nothing loads it into a page. Listed under "what is not done" below. |
+| **Modern web pages** | IE11 cannot parse or run modern JavaScript. | An on-device ES5 compatibility bundle (`BrowserForWP.Polyfill`) injected at `DOMContentLoaded` and again on completion, plus a compatibility diagnostic that tells you *why* a given site failed. The bundle raises the floor but cannot parse ES6 syntax or supply `Proxy`/`Intl`/grid — see the disclosure below. |
 | **No backend** | — | Every component — crypto, TLS, DNS, polyfills, history, localization — runs entirely on the handset. No server, no proxy service, no telemetry. |
 
 > **On the on-device loopback proxy idea:** Windows AppContainers block
@@ -33,8 +33,9 @@ project's ambition.
 
 **Bottom line:** you get a genuinely modern *transport* layer (TLS 1.3, DoH,
 pinning) on an unchanged *rendering* layer — because the rendering layer cannot
-be changed on this OS. The *content* layer (polyfills) is a validated bundle
-waiting on the injection code, not a working feature.
+be changed on this OS. The *content* layer (polyfills) is injected into every
+page at `DOMContentLoaded` and again on completion; it raises the floor for
+feature-detecting sites but cannot fix ES6 syntax or missing engine features.
 The engine abstraction means the day you point this at a device with a real
 modern engine, the transport and content layers come with you.
 
@@ -53,9 +54,9 @@ modern engine, the transport and content layers come with you.
 - **Certificate pinning** — user-managed per-site pins with explicit,
   reversible override.
 - **ES5 compatibility bundle** (`BrowserForWP.Polyfill/compat.js`) — written,
-  ES5-checked, and packaged into the app. **Not yet injected:** `TridentEngine`
-  exposes `InvokeScriptAsync` but nothing calls it on navigation, so the bundle
-  currently does nothing at runtime. See the disclosure below.
+  ES5-checked, packaged, and injected at `DOMContentLoaded` and on completion
+  via `TridentEngine.InjectPolyfillAsync`. Raises the floor; cannot parse ES6
+  syntax or supply `Proxy`/`Intl`/grid. See the disclosure below.
 - **Bilingual UI** — English and Italian, auto-selected from the phone's
   display language, with per-app override.
 - **Diagnostics** — a built-in probe that reports exactly which modern feature
@@ -166,11 +167,12 @@ honest position rather than a boast:
   Cloudflare and example.com) all pass.
 - **It has never run on a phone.** XAML layout, WebView behaviour and
   performance on 2014 hardware are unverified. Compiling is not running.
-- **One advertised feature is not wired up.** The ES5 compatibility bundle is
-  written, checked and packaged, but **nothing injects it into a page** —
-  `TridentEngine` has no injection code. The README used to claim it was
-  "injected into every document before scripts run"; that was not true, and it
-  now says so instead.
+- **The compatibility bundle has limits, and they are architectural.** It is
+  injected at `DOMContentLoaded` and again on completion, and it raises the
+  floor for feature-detecting sites — but no injected script can parse ES6
+  syntax the engine chokes on, or supply `Proxy`, `Intl`, or CSS grid. The
+  compatibility probe reports exactly which gap a page hit, and a reading-mode
+  fallback plus lite-version redirects cover the rest.
 - **An earlier claim in this README was wrong, and here is the correction.** A
   previous revision stated that the app could not be built, because the only
   available Windows VM is ARM64 and Microsoft does not support pre-17.4 Visual

@@ -157,4 +157,115 @@
   <data name="ErrorTlsHandshake" xml:space="preserve">
     <value>Impossibile stabilire la connessione sicura.</value>
   </data>
+  <data name="ErrorNavigationFailed" xml:space="preserve">
+    <value>Navigazione non riuscita. Controlla l'indirizzo e riprova.</value>
+  </data>
+
+  <!-- Schede -->
+  <data name="TabsTitle" xml:space="preserve">
+    <value>Schede</value>
+  </data>
+
+  <!-- Sito desktop -->
+  <data name="DesktopSite" xml:space="preserve">
+    <value>Sito desktop</value>
+  </data>
+
+  <!-- Cronologia e preferiti -->
+  <data name="HistoryTitle" xml:space="preserve">
+    <value>Cronologia</value>
+  </data>
+  <data name="FavoritesTitle" xml:space="preserve">
+    <value>Preferiti</value>
+  </data>
+  <data name="AddFavorite" xml:space="preserve">
+    <value>Aggiungi preferito</value>
+  </data>
+  <data name="RemoveFavorite" xml:space="preserve">
+    <value>Rimuovi preferito</value>
+  </data>
+  <data name="ClearHistory" xml:space="preserve">
+    <value>Cancella cronologia</value>
+  </data>
+
+  <!-- Dettagli sicurezza -->
+  <data name="SecurityDetails" xml:space="preserve">
+    <value>Dettagli sicurezza</value>
+  </data>
+
+  <!-- Probe TLS -->
+  <data name="TlsProbeHostLabel" xml:space="preserve">
+    <value>Host probe TLS</value>
+  </data>
+  <data name="TlsProbeRun" xml:space="preserve">
+    <value>Esegui probe TLS ora</value>
+  </data>
+
+  <!-- DoH -->
+  <data name="DohServerLabel" xml:space="preserve">
+    <value>Server DoH</value>
+  </data>
+
+  <!-- Pinning -->
+  <data name="PinTitle" xml:space="preserve">
+    <value>Pin certificati</value>
+  </data>
+  <data name="PinAdd" xml:space="preserve">
+    <value>Aggiungi pin</value>
+  </data>
+  <data name="PinRemove" xml:space="preserve">
+    <value>Rimuovi pin</value>
+  </data>
+  <data name="PinStored" xml:space="preserve">
+    <value>Pin salvato.</value>
+  </data>
+  <data name="PinMismatch" xml:space="preserve">
+    <value>Pin non corrispondente al prossimo probe.</value>
+  </data>
+
+  <!-- Homepage e ricerca -->
+  <data name="HomepageLabel" xml:space="preserve">
+    <value>Homepage</value>
+  </data>
+  <data name="SearchEngineLabel" xml:space="preserve">
+    <value>Motore di ricerca</value>
+  </data>
+
+  <!-- Modalita leggere -->
+  <data name="ReadingMode" xml:space="preserve">
+    <value>Modalità lettura</value>
+  </data>
+  <data name="NightMode" xml:space="preserve">
+    <value>Modalità notte</value>
+  </data>
+  <data name="Find" xml:space="preserve">
+    <value>Trova</value>
+  </data>
+  <data name="Share" xml:space="preserve">
+    <value>Condividi</value>
+  </data>
+  <data name="PrivateMode" xml:space="preserve">
+    <value>Modalità privata</value>
+  </data>
+  <data name="BlockTrackers" xml:space="preserve">
+    <value>Blocca tracker</value>
+  </data>
+  <data name="RestoreSession" xml:space="preserve">
+    <value>Ripristina schede all'avvio</value>
+  </data>
+  <data name="Diagnostics" xml:space="preserve">
+    <value>Diagnostica</value>
+  </data>
+  <data name="FindNoMatch" xml:space="preserve">
+    <value>Non trovato</value>
+  </data>
+  <data name="BlockedTracker" xml:space="preserve">
+    <value>Tracker bloccato</value>
+  </data>
+  <data name="ReaderFallback" xml:space="preserve">
+    <value>Articolo semplificato</value>
+  </data>
+  <data name="LiteRedirects" xml:space="preserve">
+    <value>Preferisci versioni leggere</value>
+  </data>
 </root>

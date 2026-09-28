@@ -133,6 +133,7 @@
     <Compile Include="Http\HttpClient13.vb" />
     <Compile Include="Tls13\CertificateValidator.vb" />
     <Compile Include="Tls13\ClientHelloBuilder.vb" />
+    <Compile Include="Tls13\PinStore.vb" />
     <Compile Include="Tls13\KeySchedule.vb" />
     <Compile Include="Tls13\ServerMessageParser.vb" />
     <Compile Include="Tls13\Tls13Client.vb" />

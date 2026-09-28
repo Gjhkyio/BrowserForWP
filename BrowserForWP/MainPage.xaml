@@ -8,21 +8,7 @@
     mc:Ignorable="d"
     Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
 
-    <!--
-        A Page's Content property can be set exactly ONCE, so the layout grid and
-        the settings overlay must be siblings inside a single root container.
-
-        Having them as two direct children of <Page> is the error
-        "The property 'Content' can only be set once", and its consequences are
-        far larger than one line: the XAML compiler rejects the file, so
-        MainPage.g.vb is never generated, which means every x:Name field below
-        (AddressBox, GoButton, ContentHost, ...) is reported as "not declared" in
-        the code-behind, and the project has no generated entry point either.
-        One structural mistake, roughly seventy cascading errors.
-
-        Declaring the overlay AFTER the layout grid is also what gives it the
-        correct z-order: later siblings draw on top.
-    -->
+    <!-- Single root: layout grid plus both overlays as siblings inside one Grid. -->
     <Grid>
 
         <Grid>
@@ -31,45 +17,23 @@
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="*"/>
                 <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
 
-            <!-- ── Address bar ─────────────────────────────────────────────── -->
             <Grid Grid.Row="0" Margin="8,8,8,4">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
-                <!--
-                    TextControlBackground, NOT TextBoxBackgroundThemeBrush.
-
-                    TextBoxBackgroundThemeBrush is a Windows Phone 8.0 (Silverlight)
-                    theme key. WP8.1 XAML does not define it, and the XAML compiler
-                    does not say so: `{ThemeResource <missing key>}` makes CompileXaml
-                    throw an internal lookup failure, logged as
-
-                        Microsoft.Windows.UI.Xaml.Common.targets(327,9):
-                        Xaml Internal Error error WMC9999: The given key was not
-                        present in the dictionary.
-
-                    It is non-fatal — the .xbf and the .appx still get produced and
-                    the build still exits 0 — so it survives review indefinitely
-                    while the brush silently stays unset at runtime. Verified by
-                    swapping the key: the diagnostic disappears, and appears again
-                    when it is restored.
-
-                    ApplicationPageBackgroundThemeBrush below IS a valid WP8.1 key.
-                -->
                 <Border Grid.Column="0"
                         Background="{ThemeResource TextControlBackground}"
                         CornerRadius="4" Padding="4,0">
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                        <!-- Security state; text is set in code-behind from the
-                             engine's honest capability report. -->
                         <TextBlock x:Name="SecurityGlyph" FontSize="14"
                                    VerticalAlignment="Center" Margin="4,0"
                                    Text="&#x26A0;"/>
-                        <TextBox x:Name="AddressBox" BorderThickness="0" Width="300"
+                        <TextBox x:Name="AddressBox" BorderThickness="0" Width="260"
                                  VerticalAlignment="Center"
                                  InputScope="Url"
                                  AcceptsReturn="False"
@@ -83,39 +47,126 @@
                         Click="GoButton_Click" Margin="6,0,0,0"/>
             </Grid>
 
-            <!-- ── Progress ────────────────────────────────────────────────── -->
             <ProgressBar Grid.Row="1" x:Name="LoadProgress" Height="3"
                          IsIndeterminate="False" Minimum="0" Maximum="100" Value="0"/>
 
-            <!-- ── Content: the engine's control is injected here ───────────── -->
-            <Border Grid.Row="2" x:Name="ContentHost"/>
+            <Grid Grid.Row="2">
+                <Border x:Name="ContentHost"/>
+                <Border x:Name="FindBar" Visibility="Collapsed"
+                        VerticalAlignment="Top" Margin="8"
+                        Background="{ThemeResource ApplicationPageBackgroundThemeBrush}"
+                        CornerRadius="4" Padding="8">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBox x:Name="FindBox" Width="160" InputScope="Search"
+                                 KeyDown="FindBox_KeyDown"/>
+                        <Button x:Name="FindNextButton" Margin="6,0,0,0"
+                                Click="FindNextButton_Click"/>
+                        <Button x:Name="FindCloseButton" Margin="6,0,0,0"
+                                Click="FindCloseButton_Click"/>
+                        <TextBlock x:Name="FindResult" VerticalAlignment="Center"
+                                   Margin="6,0,0,0" Opacity="0.8"/>
+                    </StackPanel>
+                </Border>
+            </Grid>
 
-            <!-- ── Command bar ─────────────────────────────────────────────── -->
-            <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="8">
-                <Button x:Name="BackButton" Click="BackButton_Click" Margin="0,0,6,0"/>
-                <Button x:Name="ForwardButton" Click="ForwardButton_Click" Margin="0,0,6,0"/>
-                <Button x:Name="ReloadButton" Click="ReloadButton_Click" Margin="0,0,6,0"/>
-                <Button x:Name="TabsButton" Click="TabsButton_Click" Margin="0,0,6,0"/>
-                <Button x:Name="SettingsButton" Click="SettingsButton_Click"/>
-            </StackPanel>
+            <TextBlock Grid.Row="3" x:Name="ErrorText" TextWrapping="Wrap"
+                       Margin="8,2" Opacity="0.9" Visibility="Collapsed"/>
+
+            <ScrollViewer Grid.Row="4" Margin="8"
+                          HorizontalScrollBarVisibility="Auto"
+                          VerticalScrollBarVisibility="Disabled">
+                <StackPanel Orientation="Horizontal">
+                    <Button x:Name="BackButton" Click="BackButton_Click" Margin="0,0,6,0"/>
+                    <Button x:Name="ForwardButton" Click="ForwardButton_Click" Margin="0,0,6,0"/>
+                    <Button x:Name="ReloadButton" Click="ReloadButton_Click" Margin="0,0,6,0"/>
+                    <Button x:Name="StopButton" Click="StopButton_Click" Margin="0,0,6,0"/>
+                    <Button x:Name="TabsButton" Click="TabsButton_Click" Margin="0,0,6,0"/>
+                    <Button x:Name="FindButton" Click="FindButton_Click" Margin="0,0,6,0"/>
+                    <Button x:Name="ReadingButton" Click="ReadingButton_Click" Margin="0,0,6,0"/>
+                    <Button x:Name="ShareButton" Click="ShareButton_Click" Margin="0,0,6,0"/>
+                    <Button x:Name="SecurityDetailsButton" Click="SecurityDetailsButton_Click" Margin="0,0,6,0"/>
+                    <Button x:Name="SettingsButton" Click="SettingsButton_Click"/>
+                </StackPanel>
+            </ScrollViewer>
         </Grid>
 
-        <!-- ── Settings / diagnostics overlay ────────────────────────────── -->
         <Grid x:Name="SettingsOverlay" Visibility="Collapsed"
               Background="#CC000000">
             <Border Background="{ThemeResource ApplicationPageBackgroundThemeBrush}"
                     Padding="16" Margin="24" CornerRadius="8"
                     VerticalAlignment="Center">
+                <ScrollViewer MaxHeight="520">
                 <StackPanel>
                     <TextBlock x:Name="SettingsTitle" FontSize="24" Margin="0,0,0,12"/>
 
-                    <!-- Language -->
                     <TextBlock x:Name="LanguageLabel" Margin="0,0,0,4"/>
                     <ComboBox x:Name="LanguagePicker" Width="280"
                               SelectionChanged="LanguagePicker_SelectionChanged"/>
 
-                    <!-- Engine + diagnostics, filled in from EngineCapabilities -->
-                    <TextBlock x:Name="DiagnosticsTitle" FontSize="18" Margin="0,16,0,4"/>
+                    <CheckBox x:Name="DesktopToggle" Margin="0,8,0,0"
+                              Checked="DesktopToggle_Checked"
+                              Unchecked="DesktopToggle_Unchecked"/>
+                    <CheckBox x:Name="PrivateModeToggle" Margin="0,4,0,0"
+                              Checked="PrivateModeToggle_Checked"
+                              Unchecked="PrivateModeToggle_Unchecked"/>
+                    <CheckBox x:Name="NightModeToggle" Margin="0,4,0,0"
+                              Checked="NightModeToggle_Checked"
+                              Unchecked="NightModeToggle_Unchecked"/>
+                    <CheckBox x:Name="BlockTrackersToggle" Margin="0,4,0,0"
+                              Checked="BlockTrackersToggle_Checked"
+                              Unchecked="BlockTrackersToggle_Unchecked"/>
+                    <CheckBox x:Name="RestoreSessionToggle" Margin="0,4,0,0"
+                              Checked="RestoreSessionToggle_Checked"
+                              Unchecked="RestoreSessionToggle_Unchecked"/>
+                    <CheckBox x:Name="LiteRedirectsToggle" Margin="0,4,0,0"
+                              Checked="LiteRedirectsToggle_Checked"
+                              Unchecked="LiteRedirectsToggle_Unchecked"/>
+
+                    <TextBlock x:Name="HomepageLabel" Margin="0,8,0,4"/>
+                    <TextBox x:Name="HomepageBox" Width="280" InputScope="Url"
+                             LostFocus="HomepageBox_LostFocus"/>
+                    <TextBlock x:Name="SearchEngineLabel" Margin="0,8,0,4"/>
+                    <ComboBox x:Name="SearchEnginePicker" Width="280"
+                              SelectionChanged="SearchEnginePicker_SelectionChanged"/>
+
+                    <TextBlock x:Name="TabsTitle" FontSize="18" Margin="0,16,0,4"/>
+                    <ListBox x:Name="TabsList" Height="80" Width="280"
+                             SelectionChanged="TabsList_SelectionChanged"/>
+                    <Button x:Name="CloseTabButton" Margin="0,4,0,0"
+                            Click="CloseTabButton_Click"/>
+
+                    <TextBlock x:Name="HistoryTitle" FontSize="18" Margin="0,12,0,4"/>
+                    <ListBox x:Name="HistoryList" Height="80" Width="280"
+                             SelectionChanged="HistoryList_SelectionChanged"/>
+                    <Button x:Name="ClearHistoryButton" Margin="0,4,0,0"
+                            Click="ClearHistoryButton_Click"/>
+
+                    <TextBlock x:Name="FavoritesTitle" FontSize="18" Margin="0,12,0,4"/>
+                    <ListBox x:Name="FavoritesList" Height="80" Width="280"
+                             SelectionChanged="FavoritesList_SelectionChanged"/>
+                    <StackPanel Orientation="Horizontal">
+                        <Button x:Name="AddFavoriteButton" Margin="0,4,6,0"
+                                Click="AddFavoriteButton_Click"/>
+                        <Button x:Name="RemoveFavoriteButton" Margin="0,4,0,0"
+                                Click="RemoveFavoriteButton_Click"/>
+                    </StackPanel>
+
+                    <Button x:Name="DiagnosticsButton" Margin="0,12,0,6"
+                            Click="DiagnosticsButton_Click"/>
+                    <Button x:Name="CloseSettingsButton" Click="CloseSettingsButton_Click"/>
+                </StackPanel>
+                </ScrollViewer>
+            </Border>
+        </Grid>
+
+        <Grid x:Name="DiagnosticsOverlay" Visibility="Collapsed"
+              Background="#CC000000">
+            <Border Background="{ThemeResource ApplicationPageBackgroundThemeBrush}"
+                    Padding="16" Margin="24" CornerRadius="8"
+                    VerticalAlignment="Center">
+                <ScrollViewer MaxHeight="520">
+                <StackPanel>
+                    <TextBlock x:Name="DiagnosticsTitle" FontSize="18" Margin="0,0,0,4"/>
                     <TextBlock x:Name="EngineText" TextWrapping="Wrap" Margin="0,0,0,8"
                                Opacity="0.8"/>
 
@@ -124,8 +175,33 @@
                     <TextBlock x:Name="CompatProbeResult" TextWrapping="Wrap"
                                Opacity="0.8" Margin="0,0,0,8"/>
 
-                    <Button x:Name="CloseSettingsButton" Click="CloseSettingsButton_Click"/>
+                    <TextBlock x:Name="TlsProbeHostLabel" Margin="0,0,0,4"/>
+                    <TextBox x:Name="TlsHostBox" Width="280" InputScope="Url"/>
+                    <Button x:Name="TlsProbeButton" Margin="0,4,0,6"
+                            Click="TlsProbeButton_Click"/>
+                    <TextBlock x:Name="TlsProbeResult" TextWrapping="Wrap"
+                               Opacity="0.8" Margin="0,0,0,8"/>
+
+                    <TextBlock x:Name="DohServerLabel" Margin="0,0,0,4"/>
+                    <TextBox x:Name="DohServerBox" Width="280" InputScope="Url"
+                             LostFocus="DohServerBox_LostFocus"/>
+
+                    <TextBlock x:Name="PinTitle" FontSize="18" Margin="0,12,0,4"/>
+                    <TextBox x:Name="PinHostBox" Width="280" InputScope="Url"/>
+                    <TextBox x:Name="PinValueBox" Width="280" Margin="0,4,0,0"/>
+                    <StackPanel Orientation="Horizontal">
+                        <Button x:Name="PinAddButton" Margin="0,4,6,0"
+                                Click="PinAddButton_Click"/>
+                        <Button x:Name="PinRemoveButton" Margin="0,4,0,0"
+                                Click="PinRemoveButton_Click"/>
+                    </StackPanel>
+                    <TextBlock x:Name="PinStatus" TextWrapping="Wrap"
+                               Opacity="0.8" Margin="0,4,0,8"/>
+
+                    <Button x:Name="DiagnosticsBackButton" Margin="0,6,0,0"
+                            Click="DiagnosticsBackButton_Click"/>
                 </StackPanel>
+                </ScrollViewer>
             </Border>
         </Grid>
 

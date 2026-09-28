@@ -12,6 +12,10 @@ Project("{BC8A1FFA-BEE3-4634-8014-F334798102B3}") = "BrowserForWP.Localization",
 EndProject
 Project("{BC8A1FFA-BEE3-4634-8014-F334798102B3}") = "BrowserForWP.Net", "BrowserForWP.Net\BrowserForWP.Net.vbproj", "{3B9E1C74-5A21-4F0E-9D8C-6E2A7B4F1D93}"
 EndProject
+Project("{BC8A1FFA-BEE3-4634-8014-F334798102B3}") = "BrowserForWP.Core.Tests", "tests\BrowserForWP.Core.Tests\BrowserForWP.Core.Tests.vbproj", "{C0DE0004-0004-4A2B-9C3D-1B2C3D4E5F04}"
+EndProject
+Project("{BC8A1FFA-BEE3-4634-8014-F334798102B3}") = "BrowserForWP.Crypto.Tests", "tests\BrowserForWP.Crypto.Tests\BrowserForWP.Crypto.Tests.vbproj", "{C0DE0005-0005-4A2B-9C3D-1B2C3D4E5F05}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -88,6 +92,24 @@ Global
 		{3B9E1C74-5A21-4F0E-9D8C-6E2A7B4F1D93}.Release|ARM.Build.0 = Release|ARM
 		{3B9E1C74-5A21-4F0E-9D8C-6E2A7B4F1D93}.Release|x86.ActiveCfg = Release|x86
 		{3B9E1C74-5A21-4F0E-9D8C-6E2A7B4F1D93}.Release|x86.Build.0 = Release|x86
+		{C0DE0004-0004-4A2B-9C3D-1B2C3D4E5F04}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C0DE0004-0004-4A2B-9C3D-1B2C3D4E5F04}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C0DE0004-0004-4A2B-9C3D-1B2C3D4E5F04}.Debug|ARM.ActiveCfg = Debug|ARM
+		{C0DE0004-0004-4A2B-9C3D-1B2C3D4E5F04}.Debug|ARM.Build.0 = Debug|ARM
+		{C0DE0004-0004-4A2B-9C3D-1B2C3D4E5F04}.Debug|x86.ActiveCfg = Debug|x86
+		{C0DE0004-0004-4A2B-9C3D-1B2C3D4E5F04}.Debug|x86.Build.0 = Debug|x86
+		{C0DE0004-0004-4A2B-9C3D-1B2C3D4E5F04}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C0DE0004-0004-4A2B-9C3D-1B2C3D4E5F04}.Release|ARM.ActiveCfg = Release|ARM
+		{C0DE0004-0004-4A2B-9C3D-1B2C3D4E5F04}.Release|x86.ActiveCfg = Release|x86
+		{C0DE0005-0005-4A2B-9C3D-1B2C3D4E5F05}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C0DE0005-0005-4A2B-9C3D-1B2C3D4E5F05}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C0DE0005-0005-4A2B-9C3D-1B2C3D4E5F05}.Debug|ARM.ActiveCfg = Debug|ARM
+		{C0DE0005-0005-4A2B-9C3D-1B2C3D4E5F05}.Debug|ARM.Build.0 = Debug|ARM
+		{C0DE0005-0005-4A2B-9C3D-1B2C3D4E5F05}.Debug|x86.ActiveCfg = Debug|x86
+		{C0DE0005-0005-4A2B-9C3D-1B2C3D4E5F05}.Debug|x86.Build.0 = Debug|x86
+		{C0DE0005-0005-4A2B-9C3D-1B2C3D4E5F05}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C0DE0005-0005-4A2B-9C3D-1B2C3D4E5F05}.Release|ARM.ActiveCfg = Release|ARM
+		{C0DE0005-0005-4A2B-9C3D-1B2C3D4E5F05}.Release|x86.ActiveCfg = Release|x86
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

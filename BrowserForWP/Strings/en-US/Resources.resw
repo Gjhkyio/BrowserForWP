@@ -157,4 +157,115 @@
   <data name="ErrorTlsHandshake" xml:space="preserve">
     <value>The secure connection could not be established.</value>
   </data>
+  <data name="ErrorNavigationFailed" xml:space="preserve">
+    <value>Navigation failed. Check the address and try again.</value>
+  </data>
+
+  <!-- Tabs -->
+  <data name="TabsTitle" xml:space="preserve">
+    <value>Tabs</value>
+  </data>
+
+  <!-- Desktop site -->
+  <data name="DesktopSite" xml:space="preserve">
+    <value>Desktop site</value>
+  </data>
+
+  <!-- History and favorites -->
+  <data name="HistoryTitle" xml:space="preserve">
+    <value>History</value>
+  </data>
+  <data name="FavoritesTitle" xml:space="preserve">
+    <value>Favorites</value>
+  </data>
+  <data name="AddFavorite" xml:space="preserve">
+    <value>Add favorite</value>
+  </data>
+  <data name="RemoveFavorite" xml:space="preserve">
+    <value>Remove favorite</value>
+  </data>
+  <data name="ClearHistory" xml:space="preserve">
+    <value>Clear history</value>
+  </data>
+
+  <!-- Security details -->
+  <data name="SecurityDetails" xml:space="preserve">
+    <value>Security details</value>
+  </data>
+
+  <!-- TLS probe -->
+  <data name="TlsProbeHostLabel" xml:space="preserve">
+    <value>TLS probe host</value>
+  </data>
+  <data name="TlsProbeRun" xml:space="preserve">
+    <value>Run TLS probe now</value>
+  </data>
+
+  <!-- DoH -->
+  <data name="DohServerLabel" xml:space="preserve">
+    <value>DoH server</value>
+  </data>
+
+  <!-- Pinning -->
+  <data name="PinTitle" xml:space="preserve">
+    <value>Certificate pins</value>
+  </data>
+  <data name="PinAdd" xml:space="preserve">
+    <value>Add pin</value>
+  </data>
+  <data name="PinRemove" xml:space="preserve">
+    <value>Remove pin</value>
+  </data>
+  <data name="PinStored" xml:space="preserve">
+    <value>Pin stored.</value>
+  </data>
+  <data name="PinMismatch" xml:space="preserve">
+    <value>Pin mismatch on next probe.</value>
+  </data>
+
+  <!-- Homepage and search -->
+  <data name="HomepageLabel" xml:space="preserve">
+    <value>Homepage</value>
+  </data>
+  <data name="SearchEngineLabel" xml:space="preserve">
+    <value>Search engine</value>
+  </data>
+
+  <!-- Lightweight modes -->
+  <data name="ReadingMode" xml:space="preserve">
+    <value>Reading mode</value>
+  </data>
+  <data name="NightMode" xml:space="preserve">
+    <value>Night mode</value>
+  </data>
+  <data name="Find" xml:space="preserve">
+    <value>Find</value>
+  </data>
+  <data name="Share" xml:space="preserve">
+    <value>Share</value>
+  </data>
+  <data name="PrivateMode" xml:space="preserve">
+    <value>Private mode</value>
+  </data>
+  <data name="BlockTrackers" xml:space="preserve">
+    <value>Block trackers</value>
+  </data>
+  <data name="RestoreSession" xml:space="preserve">
+    <value>Restore tabs on start</value>
+  </data>
+  <data name="Diagnostics" xml:space="preserve">
+    <value>Diagnostics</value>
+  </data>
+  <data name="FindNoMatch" xml:space="preserve">
+    <value>Not found</value>
+  </data>
+  <data name="BlockedTracker" xml:space="preserve">
+    <value>Blocked tracker</value>
+  </data>
+  <data name="ReaderFallback" xml:space="preserve">
+    <value>Showing simplified article</value>
+  </data>
+  <data name="LiteRedirects" xml:space="preserve">
+    <value>Prefer light site versions</value>
+  </data>
 </root>
