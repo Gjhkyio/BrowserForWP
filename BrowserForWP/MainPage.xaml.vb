@@ -806,7 +806,12 @@ Public NotInheritable Class MainPage
             Dim probe As New CompatibilityProbe()
             Dim report = Await probe.RunAsync(_engine)
 
-            If report.IsFullyCompatible Then
+            If Not report.CouldRun Then
+                ' Nothing was measured, so say that. Reporting "no missing web
+                ' features" here was a claim the probe had not earned, and it is
+                ' the shape of lie this project exists to avoid.
+                CompatProbeResult.Text = Localizer.Get("ProbeNotRun")
+            ElseIf report.IsFullyCompatible Then
                 CompatProbeResult.Text = Localizer.Get("DiagnosticsNoMissingFeatures")
             Else
                 CompatProbeResult.Text = String.Join(", ", report.MissingFeatures)

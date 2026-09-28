@@ -150,6 +150,9 @@
   <data name="DiagnosticsNoMissingFeatures" xml:space="preserve">
     <value>Nessuna funzionalità web mancante rilevata.</value>
   </data>
+  <data name="ProbeNotRun" xml:space="preserve">
+    <value>Nessuna risposta dalla pagina: è ancora in caricamento, oppure questo motore non esegue script.</value>
+  </data>
   <data name="DiagnosticsClose" xml:space="preserve">
     <value>Chiudi</value>
   </data>

@@ -150,6 +150,9 @@
   <data name="DiagnosticsNoMissingFeatures" xml:space="preserve">
     <value>No missing web features detected.</value>
   </data>
+  <data name="ProbeNotRun" xml:space="preserve">
+    <value>No answer from the page: it is still loading, or this engine cannot run scripts.</value>
+  </data>
   <data name="DiagnosticsClose" xml:space="preserve">
     <value>Close</value>
   </data>
