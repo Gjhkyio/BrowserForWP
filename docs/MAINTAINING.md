@@ -59,6 +59,13 @@ node tools/proto/tls13.mjs cloudflare.com
 # false-positive on backticks inside comments).
 node tools/check-polyfill.mjs
 
+# Static VB.NET structural check. Must print "0 finding(s)", exit code 0.
+# This is NOT a compiler. It catches block-balance errors, missing Implements
+# members, project/disk drift, namespace mismatch, resw key drift and unwired
+# XAML handlers — and it found a real End Property/End Class error. A green run
+# still does not mean the project compiles.
+node tools/check-vb.mjs
+
 # Regenerate every WP8.1 image asset from the renderer.
 python3 tools/make_logo.py
 ```
@@ -157,6 +164,66 @@ already covers the need.
 When adding a capability flag, set it to what the engine **actually** does.
 `TridentEngine` claiming `SupportsTls13 = True` would be a lie that the UI then
 repeats to the user — see the guard in the plan's Task 11, Step 3.
+
+## Build host requirements
+
+A real build needs **all three** of the following. Without them, the only
+verification available is `tools/check-vb.mjs`, which is a static checker and
+not a compiler.
+
+1. **An x64 Windows host.** Visual Studio 2013 is not supported on Arm64
+   Windows. Microsoft states that pre-17.4 Visual Studio "can run on Arm-powered
+   devices via x64 emulation, but some features aren't supported on Arm", and
+   the WP8.1 SDK ships no Arm64 MSBuild targets. An Arm64 VM cannot do this
+   build, at any setting.
+2. **Visual Studio 2013 Update 4 or later.** Update 2 is the documented minimum
+   for Windows Phone 8.1.
+3. **The Windows Phone 8.1 SDK and the Windows 8.1 SDK.** The latter is required
+   by `TargetPlatformVersion 8.1`.
+
+### Status of the build
+
+**These sources have never been compiled.** The development host is an Apple
+silicon Mac, and the available Windows 11 VM is Arm64 (`BIOS type: efi-arm64`),
+which cannot host the toolchain. Replace this paragraph with the real MSBuild
+transcript, including the Visual Studio and SDK versions, the first time a build
+succeeds. Do not paraphrase it — the entire value is that it is a real record.
+
+### Known first-build risks
+
+The library project files for `BrowserForWP.Crypto`, `.Core`, `.Localization` and
+`.Net` were **hand-authored** and have never been validated by the WP8.1 targets.
+If the build reports `MSB4019` or an unrecognised project type, recreate the
+project in the IDE (File -> New -> Project -> Visual Basic -> Windows Phone Apps
+-> Class Library) and add the existing `.vb` files to it. Expect to do this once
+per library; it is what "the SDK has not seen these files" means in practice.
+
+The most likely compile errors, in order of frequency:
+
+- **WinRT API availability.** `System.Security.Cryptography.SHA256`,
+  `HMACSHA256` and `RNGCryptoServiceProvider` do not exist in the
+  ".NET for Windows Store apps" profile. Use `WinRtCrypto`.
+  `RegexOptions.Compiled` is also unsupported.
+- **`Await` on `IAsyncAction` / `IAsyncOperation`.** VB supports this directly;
+  if the compiler objects, add
+  `Imports System.Runtime.InteropServices.WindowsRuntime` to the file.
+- **Namespace duplication.** The full name is `<RootNamespace>.` plus the file's
+  own `Namespace` block. `BrowserForWP.Crypto.vbproj` sets `RootNamespace` to
+  `BrowserForWP` precisely because its sources declare `Namespace Crypto`.
+
+## The loop
+
+Every change follows five steps, in order. The canonical version lives in
+[`.agents/skills/browserforwp/SKILL.md`](../.agents/skills/browserforwp/SKILL.md);
+this is the summary.
+
+1. **Plan** the change before writing code (`superpowers:writing-plans`).
+2. **Implement** the smallest change that satisfies the plan.
+3. **Verify** every layer touched, with the commands above.
+4. **Commit** with a Conventional Commit message.
+5. **Push.** A commit that is not pushed is not done.
+
+Then update the skill if any tool, command, file layout or constraint changed.
 
 ## Release checklist
 

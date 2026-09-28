@@ -408,7 +408,7 @@ Namespace Tls13
                     Return Body
                 End Get
             End Property
-        End Property
+        End Class
 
         ' ── Socket I/O ─────────────────────────────────────────────────────────
 

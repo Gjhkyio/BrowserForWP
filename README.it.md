@@ -142,3 +142,42 @@ descrive il ciclo obbligatorio piano → test → commit → push.
 ## Licenza
 
 [MIT](LICENSE) © 2026 vincenzosco
+
+---
+
+## Dichiarazione: questo progetto è fatto al 100% da IA
+
+Ogni parte di BrowserForWP — l'architettura, lo stack TLS 1.3, la crittografia,
+l'interfaccia, gli strumenti, la documentazione e questa nota — è stata scritta
+da un agente di programmazione IA, con una persona che ha diretto il lavoro e
+rivisto il risultato passo per passo.
+
+È una affermazione concreta su quanto fidarsi, quindi ecco la posizione onesta
+invece che un vanto:
+
+- **Qui non è stato compilato nulla.** Sulla macchina che ha scritto il codice
+  non erano disponibili né l'SDK di Windows Phone 8.1 né Visual Studio 2013,
+  quindi il codice VB.NET non è mai passato da un compilatore vero.
+  `tools/check-vb.mjs` esegue i controlli meccanici riproducibili fuori da
+  Windows e ha trovato difetti reali — ma non è un compilatore, e un esito
+  positivo non significa che compili.
+- **La crittografia e il protocollo TLS 1.3 sono verificati, ma non su un
+  telefono.** Passano `tools/gen-vectors.mjs` (52 asserzioni contro RFC
+  5869/7748/8439/8448 e NIST AES-GCM), `tools/proto/w25519.mjs` (18 controlli) e
+  `tools/proto/tls13.mjs` (31 controlli, con handshake reali verso Google,
+  Cloudflare ed example.com).
+- **Non è mai stato eseguito su un telefono.** Layout XAML, comportamento del
+  WebView e prestazioni su hardware del 2014 non sono verificati.
+- **Un tentativo di compilazione reale è stato fatto e riportato con onestà.**
+  La VM Windows disponibile è ARM64, dove Microsoft non supporta Visual Studio
+  precedente alla 17.4 e dove l'SDK WP8.1 non ha target di compilazione. È
+  documentato in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) invece di essere
+  omesso.
+- **Le affermazioni sono state verificate e quelle false eliminate.** Chromium e
+  Firefox non possono girare su questo sistema operativo e TLS 1.3 non è
+  ottenibile da esso; entrambi i fatti sono dichiarati apertamente. Il lavoro
+  che *era* possibile — uno stack TLS 1.3 scritto da zero — è stato fatto e
+  verificato.
+
+Consideralo un punto di partenza ben documentato che richiede ancora una
+compilazione reale e una prova su dispositivo, non un prodotto finito.

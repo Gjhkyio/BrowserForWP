@@ -132,3 +132,39 @@ describes the required plan → test → commit → push loop.
 ## License
 
 [MIT](LICENSE) © 2026 vincenzosco
+
+---
+
+## Disclosure: this project is 100% AI-made
+
+Every part of BrowserForWP — the architecture, the TLS 1.3 stack, the crypto,
+the UI, the tooling, the documentation and this notice — was written by an AI
+coding agent, with a human directing the work and reviewing the result at each
+step.
+
+That is a real statement about how much you should trust it, so here is the
+honest position rather than a boast:
+
+- **Nothing here has been compiled.** No Windows Phone 8.1 SDK and no Visual
+  Studio 2013 were available on the machine that wrote this, so the VB.NET has
+  never been through a real compiler. `tools/check-vb.mjs` performs the
+  mechanical checks that *can* be reproduced off-Windows, and it found genuine
+  defects — but it is not a compiler, and a green run does not mean it builds.
+- **The crypto and the TLS 1.3 protocol are verified, but not on a handset.**
+  `tools/gen-vectors.mjs` (52 assertions against RFC 5869/7748/8439/8448 and
+  NIST AES-GCM), `tools/proto/w25519.mjs` (18 checks) and
+  `tools/proto/tls13.mjs` (31 checks, completing real handshakes with Google,
+  Cloudflare and example.com) all pass.
+- **It has never run on a phone.** XAML layout, WebView behaviour and
+  performance on 2014 hardware are unverified.
+- **A real build attempt was made and reported honestly.** The available
+  Windows VM is ARM64, where Microsoft does not support pre-17.4 Visual Studio
+  and where the WP8.1 SDK has no build targets. That is documented in
+  [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) instead of being quietly skipped.
+- **Claims were tested, and the false ones were dropped.** Chromium and Firefox
+  cannot run on this OS and TLS 1.3 cannot be obtained from it; both facts are
+  stated plainly rather than papered over. The work that *was* possible — a
+  from-scratch TLS 1.3 stack — was done and verified.
+
+Treat this as a well-documented starting point that still needs a real build and
+a real device pass, not as a finished, shipped product.

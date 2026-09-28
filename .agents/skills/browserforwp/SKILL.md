@@ -81,6 +81,7 @@ verified if you skipped its command.
 | Anything in `BrowserForWP.Net/Tls13/` | `node tools/proto/tls13.mjs example.com` | `31 checks, 0 failure(s)` |
 | Test vectors themselves | `node tools/gen-vectors.mjs` | every line prefixed `✓`, exit code 0 |
 | `BrowserForWP.Polyfill/compat.js` | `node tools/check-polyfill.mjs` | `is valid ES5` |
+| Any `.vb`, `.vbproj`, `.xaml` or `.resw` | `node tools/check-vb.mjs` | `0 finding(s)`, exit code 0 |
 | `BrowserForWP/Assets/**` | `python3 tools/make_logo.py` | one line per generated PNG, exit code 0 |
 | UI / XAML / VB app code | Build in Visual Studio: `Debug \| ARM` | `Build succeeded` |
 | Crypto unit tests | Test Explorer → run `BrowserForWP.Crypto.Tests` | all tests green |
@@ -229,3 +230,38 @@ Same loop, but the diagnosis comes first.
 - A change to `BrowserForWP.Crypto/` without a passing
   `node tools/gen-vectors.mjs`.
 - Work left uncommitted or unpushed.
+- Reporting `tools/check-vb.mjs` passing as "it compiles". It is a static checker,
+  not a compiler, and its own output says so.
+
+## The loop — do all five steps, in order, every time
+
+1. **Plan.** Write or update the plan for the change first, using
+   `superpowers:writing-plans`. No code before the plan exists. If the change
+   invalidates part of an existing plan, update that plan in the same commit.
+2. **Implement.** The smallest change that satisfies the plan. Apply the
+   prototype rule: anything under `BrowserForWP.Net/Tls13/` or `X25519.vb` is
+   changed in `tools/proto/` first, verified there, then transliterated.
+3. **Verify.** Run the commands in the table above for every layer touched.
+   Report which commands were run and their real output. Never claim a layer is
+   verified because a different layer passed.
+4. **Commit.** Conventional Commits, imperative mood, subject <= 72 characters.
+5. **Push.** `git push origin HEAD`. A commit that is not pushed does not count
+   as done. Confirm with `git ls-remote origin refs/heads/main` matching
+   `git rev-parse HEAD`.
+
+**Then update this file.** If the change added, removed or altered any tool,
+command, file layout or constraint, that fact belongs here before the turn ends.
+A skill describing a previous version of the project is actively harmful, because
+it is what the next contributor trusts.
+
+## Why there is no compiler here
+
+The build host is an Apple silicon Mac. The Windows Phone 8.1 SDK is
+Windows-only, and the one available Windows VM is **ARM64** — Microsoft does not
+support pre-17.4 Visual Studio on Arm-based devices, and the WP8.1 SDK ships no
+Arm64 MSBuild targets. A real build therefore needs an **x64** Windows host; see
+`docs/MAINTAINING.md`.
+
+This is why every non-trivial decision in this repo is backed by an executable
+prototype instead of a compile. That method found four real TLS bugs and one real
+compile error. Do not replace it with optimism.
