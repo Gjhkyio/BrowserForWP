@@ -6,6 +6,7 @@
 ' a mystery.
 
 Imports System.Threading.Tasks
+Imports BrowserForWP.Core.Browser
 Imports Windows.Storage
 Imports Windows.UI.Xaml.Controls
 
@@ -111,6 +112,55 @@ Namespace Engine
             Catch ex As Exception
                 Return False
             End Try
+        End Function
+
+        ''' <summary>Find text in the page via window.find. Never throws.</summary>
+        Public Async Function FindInPageAsync(searchTerm As String) As Task(Of Boolean)
+            Try
+                If String.IsNullOrEmpty(searchTerm) Then
+                    Return False
+                End If
+                Dim foundText As String = Await InvokeScriptAsync("window.find(""" & EscapeJsString(searchTerm) & """)")
+                If String.IsNullOrEmpty(foundText) Then
+                    Return False
+                End If
+                Return foundText.Trim().ToLowerInvariant() = "true"
+            Catch ex As Exception
+                Return False
+            End Try
+        End Function
+
+        ''' <summary>Swap the page for its article text. Reload exits. Never throws.</summary>
+        Public Async Function EnterReadingModeAsync() As Task(Of Boolean)
+            Try
+                Dim markerText As String = Await InvokeScriptAsync(ReadingMode.Script)
+                If String.IsNullOrEmpty(markerText) Then
+                    Return False
+                End If
+                Return markerText.Trim() = "1"
+            Catch ex As Exception
+                Return False
+            End Try
+        End Function
+
+        ''' <summary>Install or remove the night stylesheet. Never throws.</summary>
+        Public Async Function SetNightModeAsync(enabled As Boolean) As Task(Of Boolean)
+            Try
+                Await InvokeScriptAsync(NightMode.BuildScript(enabled))
+                Return True
+            Catch ex As Exception
+                Return False
+            End Try
+        End Function
+
+        Private Shared Function EscapeJsString(rawText As String) As String
+            If rawText Is Nothing Then
+                Return String.Empty
+            End If
+            Dim cleanText As String = rawText.Replace(vbCr, " ").Replace(vbLf, " ")
+            cleanText = cleanText.Replace("\", "\\")
+            cleanText = cleanText.Replace("""", "\""")
+            Return cleanText
         End Function
     End Class
 
