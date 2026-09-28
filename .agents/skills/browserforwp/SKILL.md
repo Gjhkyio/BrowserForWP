@@ -90,10 +90,21 @@ port the change:
 - `X25519.vb` -> `tools/proto/w25519.mjs` -> `18 checks, 0 failure(s)`
 - `BrowserForWP.Net/Tls13/*` -> `tools/proto/tls13.mjs` -> `31 checks, 0 failure(s)`
 - `BrowserForWP.Net/Tls13/PinStore.vb` -> `tools/proto/pinstore.mjs` -> `0 failure(s)`
+- `ProbeReport` verdict rule -> `tools/proto/probe-verdict.mjs` -> `9/9 checks passed`
 
 `PinStore.vb` is pure host/pin logic rather than protocol code, so its mirror is
 a plain logic mirror like `core-logic.mjs`, not a wire-format prototype. It still
 falls under the rule: change the mirror, watch it pass, then port.
+`probe-verdict.mjs` mirrors the `IsFullyCompatible` rule and separately asserts
+the file contract around it, because the defect it guards against is a *verdict*
+being drawn from an absent measurement.
+
+`ie-adapt.mjs` is not a logic mirror and does not pretend to be: it is a decision
+record. It asserts that `IeModeProbe.vb` exists, stays ES5, and reads
+`documentMode`/`X-UA-Compatible`, and that `docs/MAINTAINING.md` still states the
+four levers that make re-configuring Trident impossible. Its ninth check — the
+measured `documentMode` from a real handset — cannot run here and is deliberately
+not asserted; record it in `MAINTAINING.md` when someone has a device.
 
 **Fourth — a self-consistent TLS client proves nothing.** Sealing and opening your
 own records will round-trip any bug that is symmetric. `tools/proto/tls13.mjs`
@@ -154,6 +165,8 @@ verified if you skipped its command.
 | Lite defaults / caps / resources | `node tools/proto/lightweight.mjs` | `0 failure(s)` |
 | Shim delivery / redirect rules | `node tools/proto/modern-sites.mjs` | `0 failure(s)` |
 | Picker/tab re-entrancy, sln registration | `node tools/proto/shell-guards.mjs` | `0 failure(s)` |
+| `CompatibilityProbe.vb` / any probe verdict | `node tools/proto/probe-verdict.mjs` | `9/9 checks passed` |
+| Any claim about re-configuring Trident | `node tools/proto/ie-adapt.mjs` | `9/9 checks passed` |
 | `BrowserForWP.Polyfill/compat.js` | `node tools/check-polyfill.mjs` | `is valid ES5` |
 | Any `.vb`, `.vbproj`, `.xaml` or `.resw` | `node tools/check-vb.mjs` | `0 finding(s)`, exit code 0 |
 | `BrowserForWP/Assets/**` | `python3 tools/make_logo.py` | one line per generated PNG, exit code 0 |
