@@ -26,8 +26,17 @@
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
+                <!--
+                  TextBoxBackgroundThemeBrush is the key Windows Phone 8.1 defines
+                  for a text field, and the one its own TextBox style uses. The
+                  previous name here, TextControlBackground, is a UWP/Win10 key
+                  that this platform does not define. A ThemeResource is resolved
+                  when the page LOADS, not when it compiles, so the build accepted
+                  it: the page would have thrown on the handset instead. Every
+                  ThemeResource key is checked now by tools/check-vb.mjs.
+                -->
                 <Border Grid.Column="0"
-                        Background="{ThemeResource TextControlBackground}"
+                        Background="{ThemeResource TextBoxBackgroundThemeBrush}"
                         CornerRadius="4" Padding="4,0">
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                         <TextBlock x:Name="SecurityGlyph" FontSize="14"
