@@ -71,4 +71,78 @@ Namespace Engine.Native
         End Function
     End Class
 
+    ''' <summary>
+    ''' One compound selector: at most one type, one class and one id. Attribute
+    ''' selectors and pseudo-classes are deliberately absent -- the engine reports
+    ''' them as unsupported instead of matching them wrongly.
+    ''' </summary>
+    Public NotInheritable Class CssSimpleSelector
+
+        Public Property TypeName As String = String.Empty
+        Public Property ClassName As String = String.Empty
+        Public Property IdName As String = String.Empty
+
+        ''' <summary>id counts 100, class 10, type 1. The universal selector adds nothing.</summary>
+        Public Function Specificity() As Integer
+            Dim total As Integer = 0
+            If Not String.IsNullOrEmpty(IdName) Then total += 100
+            If Not String.IsNullOrEmpty(ClassName) Then total += 10
+            If Not String.IsNullOrEmpty(TypeName) AndAlso TypeName <> "*" Then total += 1
+            Return total
+        End Function
+
+        Public ReadOnly Property IsEmpty As Boolean
+            Get
+                Return String.IsNullOrEmpty(TypeName) AndAlso String.IsNullOrEmpty(ClassName) AndAlso String.IsNullOrEmpty(IdName)
+            End Get
+        End Property
+    End Class
+
+    ''' <summary>A simple selector plus how it relates to the part on its right.</summary>
+    Public NotInheritable Class CssSelectorPart
+
+        Public Property Combinator As String = String.Empty
+        Public Property Simple As CssSimpleSelector
+
+    End Class
+
+    Public NotInheritable Class CssSelector
+
+        Public Property Parts As New List(Of CssSelectorPart)()
+
+        Public Function Specificity() As Integer
+            Dim total As Integer = 0
+            For Each partItem In Parts
+                If partItem.Simple IsNot Nothing Then total += partItem.Simple.Specificity()
+            Next
+            Return total
+        End Function
+
+    End Class
+
+    Public NotInheritable Class StyleDeclaration
+
+        Public Sub New(name As String, value As String)
+            Me.Name = name
+            Me.Value = value
+        End Sub
+
+        Public ReadOnly Name As String
+        Public ReadOnly Value As String
+
+    End Class
+
+    Public NotInheritable Class CssRule
+
+        Public Property Selectors As New List(Of CssSelector)()
+        Public Property Declarations As New List(Of StyleDeclaration)()
+
+    End Class
+
+    Public NotInheritable Class Stylesheet
+
+        Public Property Rules As New List(Of CssRule)()
+
+    End Class
+
 End Namespace

@@ -683,6 +683,10 @@ const PROFILE_HAZARDS = [
     'or ArgumentException for failures.'],
   [/\bCryptographicEngine\.Verify\b/,
     'the WinRT type exposes VerifySignature / VerifySignatureWithHashInput, not Verify.'],
+  [/\bControlChars\b/,
+    'Microsoft.VisualBasic.ControlChars is not in the Store profile (BC30451), even ' +
+    'though Microsoft.VisualBasic.Strings (AscW, ChrW) is. Test whitespace with ' +
+    'Char.IsWhiteSpace, or use the numeric Char code.'],
 ];
 
 function checkProfileHazards() {

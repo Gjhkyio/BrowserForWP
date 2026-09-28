@@ -608,8 +608,14 @@ Families actually observed, in order of how misleading they are:
 - **More profile gaps, found in Round 5.** `List(Of T).AsReadOnly()` is not in the
   profile either — `ReadOnlyCollection(Of T)` is missing, so the call is
   `BC30456` rather than a silent degradation. Check any BCL helper against the
-  profile surface before using it; `tools/check-vb.mjs` knows only the three
-  above.
+  profile surface before using it; `tools/check-vb.mjs` flags this family.
+- **`ControlChars` is not in the Store profile** (`BC30451`) — even though
+  `Microsoft.VisualBasic.Strings` is, since `AscW` and `ChrW` both compile. So the
+  shape of `Microsoft.VisualBasic` here is partial, and the friendly constants
+  (tab, CR, LF, form feed) are exactly the part that went missing. Test whitespace
+  with `Char.IsWhiteSpace`, which is what the class-attribute split in
+  `SelectorMatcher` does. Found by compiling the native-engine plan's Task 5;
+  `tools/check-vb.mjs` now flags it as well.
 - **APIs that compile and then fail at run time.** `System.Text.Encoding.GetEncoding`
   *is* in this profile — the guest build accepts it, so it is **not**
   `BC30456` — yet Microsoft's own documentation for the method says unsupported
