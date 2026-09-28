@@ -440,6 +440,22 @@ on every other `error BC` / `error MSB` / `error APPX` line.
    `InvokeScriptAsync("eval", ...)` before the document scripts run) or soften the
    claim. Do not leave the README asserting a behaviour the code does not have.
 
+2. **The TLS 1.3 stack is compiled and shipped, but unreachable from the app.**
+   `BrowserForWP.Net` is referenced by the app project and builds, so
+   `Tls13Client`, `HttpClient13` and `DohResolver` all end up in the package — but
+   **nothing calls any of them.** The `WebView` performs every navigation through
+   Schannel, so the TLS 1.3 path has no entry point in the UI. Task 15 Step 2 of
+   `2026-09-28-browserforwp.md` specifies `Diagnostics/TlsProbe.vb`, the component
+   that would have connected them; that file **does not exist**. Until it does,
+   treat "the app speaks TLS 1.3" as describing the library, not the browser.
+
+3. **Certificate pinning is advertised but not implemented.** `README.md` lists
+   "user-managed per-site pins with explicit, reversible override" under features.
+   There is no pinning code anywhere: no pin store, no pin comparison in
+   `Tls13/CertificateValidator.vb`, and no resource keys for a UI. The same
+   question as item 1 applies — implement it or soften the claim. Note that
+   `CertificateValidator` validates the chain only; that is not pinning.
+
 ### Error taxonomy
 
 The library project files are hand-authored. If one of them stops being

@@ -151,14 +151,18 @@ BrowserForWP.sln              ← open this in Visual Studio 2013+
 BrowserForWP/                 ← the WP8.1 app: XAML UI, assets, UI strings
 BrowserForWP.Core/            ← engine abstraction, tabs, history, address bar
 BrowserForWP.Net/             ← TLS 1.3, DoH, HTTP client
-BrowserForWP.Crypto/          ← HKDF, X25519, ChaCha20-Poly1305, AES-GCM
+BrowserForWP.Crypto/          ← HKDF, X25519, AES-GCM (no ChaCha: one suite, see below)
 BrowserForWP.Localization/    ← language resolution + string lookup
+BrowserForWP.Polyfill/        ← compat.js, packaged but NOT injected (see below)
 docs/ARCHITECTURE.md          ← design + the platform laws
 docs/MAINTAINING.md           ← build/run/extend recipes
 tools/gen-vectors.mjs         ← crypto verification (runs anywhere)
+tools/proto/*.mjs             ← the runnable prototypes for X25519 and TLS 1.3
 tools/make_logo.py            ← regenerates every image asset
 tools/check-vb.mjs            ← 12 categories of static VB/XAML/project checks
+tools/check-polyfill.mjs      ← ES5 validity of the shim
 tools/vm-build.cmd            ← the real build, run inside the Windows guest
+tools/wmc9999-probe.sh        ← characterises the WMC9999 diagnostic + XAML drift
 ```
 
 Rule of thumb: **crypto knows nothing about TLS; TLS knows nothing about the
@@ -293,6 +297,12 @@ Same loop, but the diagnosis comes first.
 - Asserting that something "cannot be built" or "is not supported" without having
   tried it. This repository has already paid for that mistake once: the README
   claimed the ARM64 guest could not build, for three rounds, and it can.
+- Describing a component as a shipped feature when nothing calls it. Two exist
+  right now, and both are catalogued in `docs/MAINTAINING.md` § "Still open":
+  `compat.js` is packaged but never injected, and `Tls13Client` / `HttpClient13` /
+  `DohResolver` compile into the package while the `WebView` does all navigation
+  through Schannel. Before listing anything as a feature, `grep` for a caller.
+  Compiled is not reachable; reachable is not verified on a handset.
 
 ## The loop — do all five steps, in order, every time
 
