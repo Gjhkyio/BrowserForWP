@@ -119,8 +119,22 @@
     <Content Include="Assets\StoreLogo.scale-240.png" />
     <Content Include="Assets\WideLogo.png" />
     <Content Include="Assets\WideLogo.scale-240.png" />
-    <!-- Injected into every document by TridentEngine. -->
-    <Content Include="Polyfill\compat.js" />
+    <!--
+      The polyfill has ONE canonical source, in BrowserForWP.Polyfill. It is
+      included here with a Link so it ships inside the app package at
+      Polyfill\compat.js without being duplicated in the repository.
+
+      This previously read <Content Include="Polyfill\compat.js" />, pointing at
+      a path that does not exist in this project. A declared content item whose
+      file is absent fails the build with an unattributed "cannot find the path
+      specified", and because it fails early the XAML compile never runs, so
+      App.g.vb is never generated and the project loses both InitializeComponent
+      and its generated entry point. One missing file, a cascade of errors that
+      all look like code problems.
+    -->
+    <Content Include="..\BrowserForWP.Polyfill\compat.js">
+      <Link>Polyfill\compat.js</Link>
+    </Content>
   </ItemGroup>
   <ItemGroup>
     <!-- UI strings. The hosting platform resolves the language; see

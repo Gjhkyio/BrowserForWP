@@ -268,7 +268,12 @@ function checkBlockBalance(file, lines) {
 
 // ── 2/5. Namespaces, declarations and cross-project imports ─────────────────
 function readProject(file) {
-  const xml = fs.readFileSync(file, 'utf8');
+  // Strip XML comments BEFORE scanning for items. Without this, an `<Item>`
+  // example written inside a comment is parsed as a real declaration -- which is
+  // exactly what happened: a comment describing the old
+  // `<Content Include="Polyfill\compat.js" />` was read as a live item and
+  // reported as a missing file. The same mistake the .vb scanner already avoids.
+  const xml = fs.readFileSync(file, 'utf8').replace(/<!--[\s\S]*?-->/g, '');
   const rootNamespace = (xml.match(/<RootNamespace>([^<]*)</) || [, ''])[1].trim();
   const assemblyName = (xml.match(/<AssemblyName>([^<]*)</) || [, ''])[1].trim();
   // VB projects declare .vb files as <Compile>, but .xaml and .resw are
@@ -366,8 +371,19 @@ function checkProjectParity() {
     // but the habit is what hides the next real defect.
     const declared = new Set(project.declaredItems);
     const missing = onDisk.filter((f) => !declared.has(f));
-    const phantom = project.declaredItems.filter((f) =>
-      /(\.vb|\.xaml|\.resw)$/.test(f) && !fs.existsSync(path.join(project.dir, f)));
+
+    // EVERY declared item must exist, not just source files. An earlier version
+    // of this check only covered .vb/.xaml/.resw, and that hole let through a
+    // `<Content Include="Polyfill\compat.js">` pointing at a file that was never
+    // created -- a defect that fails the build with an unattributed "cannot find
+    // the path specified" and then cascades into dozens of misleading errors.
+    // Do not narrow this again.
+    const phantom = project.declaredItems.filter((f) => {
+      if (f.includes('*') || f.includes('?')) return false;   // MSBuild wildcard
+      // A Link item is resolved by MSBuild relative to the project; the Include
+      // path may legitimately point outside the project directory.
+      return !fs.existsSync(path.join(project.dir, f));
+    });
 
     for (const f of missing) {
       fail('project-parity', project.file, `file exists on disk but is not in <Compile Include>: ${f}`);

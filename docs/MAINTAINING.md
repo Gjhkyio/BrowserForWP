@@ -219,6 +219,39 @@ msbuild BrowserForWP.sln /p:Configuration=Debug /p:Platform=ARM /v:minimal
 Then copy the repository back (or work from git) rather than building in place.
 A failure with no file path attached is almost always the toolchain, not the code.
 
+### Round 2 — what was fixed, and what is still open
+
+The second build removed two whole error families, confirming the first two fixes:
+`The property "Content" can only be set once` and `Value '128274' cannot be
+converted to 'Char'` no longer appear.
+
+**Cause of the remaining `Sub Main` / `InitializeComponent` / `x:Name` cascade:**
+`BrowserForWP.vbproj` declared `<Content Include="Polyfill\compat.js" />`, but no
+such file existed in the project — the polyfill lives in `BrowserForWP.Polyfill`.
+A declared content item with no file fails the build early, so the XAML compile
+never runs and `App.g.vb` is never generated. This is why `Sub Main` and
+`InitializeComponent` were missing *again* after the XAML was already correct.
+
+Fixed by including the canonical file with a `Link`, so it ships at
+`Polyfill\compat.js` without being duplicated in the repository. **The checker
+did not catch this**, because its "declared file exists" test only covered
+`.vb`/`.xaml`/`.resw`; it now covers every declared item, with a negative control.
+
+**Still open:**
+
+1. `The referenced component 'BrowserForWP.Core' / '.Crypto' / '.Localization'
+could not be found`, and every type they define being `not defined`. This may
+still be unresolved, **or** it may be a consequence of the early failure aborting
+the build before the libraries were built. Round 3 settles it. If it persists,
+recreate each library in the IDE as a WP8.1 Class Library and re-add the sources.
+2. **The polyfill is packaged but never injected.** `compat.js` now ships in the
+app, but nothing reads it: `TridentEngine` has no injection code, only
+`InvokeScriptAsync`. The README claims the polyfill is "injected into every
+document before scripts run" — **that is not yet true.** Either implement
+injection on navigation (read from the app package, then
+`InvokeScriptAsync("eval", ...)` before the document scripts run) or soften the
+claim. Do not leave the README asserting a behaviour the code does not have.
+
 ### Known first-build risks
 
 The library project files for `BrowserForWP.Crypto`, `.Core`, `.Localization` and
