@@ -8,7 +8,7 @@
 > in the next section is **superseded** and is kept only as a record of the
 > mistake.
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Prove that BrowserForWP actually compiles, or establish with evidence why it cannot be proven on the available hardware, and make the project's AI authorship and maintenance loop explicit.
 
@@ -29,6 +29,11 @@
 ---
 
 ### Task 1: Remove build artefacts from version control
+
+**Outcome: satisfied by the committed `.gitignore`.** `git ls-files` shows no
+`bin/`, `obj/`, `*.suo` or `AppPackages/` entries across the 68 tracked files.
+Steps marked complete retroactively: the rules were written before they were
+verified, and verification says they hold.
 
 **Status: ALREADY SATISFIED — verified, no work required.**
 
@@ -54,7 +59,7 @@ work. Run them if these rules are ever changed.
 **Files:**
 - Verify only: `.gitignore`, `BrowserForWP.v12.suo`, `BrowserForWP/obj/**`
 
-- [ ] **Step 1: Confirm what is tracked**
+- [x] **Step 1: Confirm what is tracked**
 
 ```bash
 git ls-files | grep -Ei '\.suo$|/obj/'
@@ -62,7 +67,7 @@ git ls-files | grep -Ei '\.suo$|/obj/'
 
 Expected: at least `BrowserForWP.v12.suo` and several `BrowserForWP/obj/Debug/*` paths.
 
-- [ ] **Step 2: Add the ignore rules**
+- [x] **Step 2: Add the ignore rules**
 
 Append to `.gitignore`:
 
@@ -77,7 +82,7 @@ Append to `.gitignore`:
 .vs/
 ```
 
-- [ ] **Step 3: Untrack them without deleting the working copies**
+- [x] **Step 3: Untrack them without deleting the working copies**
 
 ```bash
 git rm -r --cached BrowserForWP.v12.suo BrowserForWP/obj
@@ -85,7 +90,7 @@ git rm -r --cached BrowserForWP.v12.suo BrowserForWP/obj
 
 Expected: a list of `rm 'BrowserForWP/obj/Debug/App.g.vb'`-style lines. If a path is reported as not tracked, that is fine — it means it was never committed.
 
-- [ ] **Step 4: Verify nothing generated remains tracked**
+- [x] **Step 4: Verify nothing generated remains tracked**
 
 ```bash
 git ls-files | grep -Ei '\.suo$|/obj/' || echo "clean: no build artefacts tracked"
@@ -93,7 +98,7 @@ git ls-files | grep -Ei '\.suo$|/obj/' || echo "clean: no build artefacts tracke
 
 Expected: `clean: no build artefacts tracked`
 
-- [ ] **Step 5: Commit and push**
+- [x] **Step 5: Commit and push**
 
 ```bash
 git add .gitignore
@@ -132,7 +137,11 @@ Implemented in `tools/check-vb.mjs`. It strips comments and string literals befo
 node tools/check-vb.mjs
 ```
 
-Expected: `31 check group(s) run, 0 finding(s).`
+Expected: `31 check group(s) run, 0 finding(s).` — that was the count when this
+step was executed. Later rounds grew the checker to **36** groups, so re-running
+it today prints `36 check group(s) run, 0 finding(s).` The group count is
+expected to drift as checks are added; what must never change is
+`0 finding(s)` and exit code 0.
 
 It found a **real compile error** on its first run: `BrowserForWP.Net/Tls13/Tls13Client.vb` closed the nested `RawRecord` class with `End Property` instead of `End Class`. Fixed.
 
@@ -193,7 +202,7 @@ git push origin HEAD
 it cannot host this build. This is a hardware requirement, not a configuration
 one, and no amount of fiddling inside the ARM64 guest changes it.
 
-- [ ] **Step 1: Confirm the guest architecture before doing anything else**
+- [x] **Step 1: Confirm the guest architecture before doing anything else**
 
 On the macOS host:
 
@@ -205,7 +214,7 @@ Expected on the current VM: `BIOS type: efi-arm64`
 
 If it prints `efi64`, this VM is already usable — skip to Task 4.
 
-- [ ] **Step 2: Create an x64 Windows VM**
+- [x] **Step 2: Create an x64 Windows VM**
 
 Windows Phone 8.1 development needs Windows 8.1 or 10 x64; Windows 11 x64 also
 works for VS2013 itself, though the WP8.1 emulator does not. A physical x64
@@ -221,13 +230,13 @@ Expected: the VM boots. Note that Apple silicon runs x64 guests under emulation,
 which is extremely slow for an IDE; **prefer a physical x64 PC if one is
 available.** This is the single biggest practical obstacle to the whole plan.
 
-- [ ] **Step 3: Install the toolchain, in this order**
+- [x] **Step 3: Install the toolchain, in this order**
 
 1. **Visual Studio 2013 Update 4 or later** (Community or Professional). Update 2 is the documented minimum for Windows Phone 8.1; use Update 4+ to avoid known WP8.1 build issues.
 2. **Windows Phone 8.1 SDK** — the "Windows Phone 8.1 Emulators" package is optional and only needed to run, not to build.
 3. **Windows 8.1 SDK** — required by `TargetPlatformVersion 8.1`.
 
-- [ ] **Step 4: Verify the toolchain is present**
+- [x] **Step 4: Verify the toolchain is present**
 
 ```cmd
 "%ProgramFiles(x86)%\Microsoft Visual Studio 12.0\Common7\IDE\devenv.com" /? >nul 2>&1 && echo VS2013 OK
@@ -238,7 +247,7 @@ dir "%ProgramFiles(x86)%\Windows Kits\8.1" >nul 2>&1 && echo Win8.1 SDK OK
 Expected: all three `OK` lines. If `WP8.1 SDK OK` is missing, the build will fail
 with `MSB4019` (imported project not found) and nothing else in the plan matters.
 
-- [ ] **Step 5: Record the requirement in the docs**
+- [x] **Step 5: Record the requirement in the docs**
 
 Add to `docs/MAINTAINING.md` under a new `## Build host requirements` heading:
 
@@ -257,7 +266,7 @@ Without all three, the only verification available is `tools/check-vb.mjs`,
 which is a static checker and **not** a compiler.
 ```
 
-- [ ] **Step 6: Commit and push**
+- [x] **Step 6: Commit and push**
 
 ```bash
 git add docs/MAINTAINING.md
@@ -269,6 +278,13 @@ git push origin HEAD
 
 ### Task 4: Build the solution and fix what breaks
 
+**Outcome: the solution builds.** `BUILD_EXIT=0` for `Debug|ARM` and
+`Release|ARM`, producing all four library DLLs, `BrowserForWP.exe`, `App.xbf`,
+`MainPage.xbf` and the `*.appx` / `*.appxbundle` / `*.appxupload` set. Twelve
+consecutive rebuilds agreed. The error taxonomy is in `docs/MAINTAINING.md`; the
+follow-on work is `2026-09-28-build-closure.md`, which made `tools/vm-build.cmd`
+fail on real compiler errors rather than relaying MSBuild's exit code.
+
 **Files:**
 - Modify: `BrowserForWP.sln`, `BrowserForWP*/**.vbproj` (as required by the build)
 - Modify: `docs/MAINTAINING.md` (record the verified result)
@@ -277,7 +293,7 @@ git push origin HEAD
 - Consumes: the build host from Task 3.
 - Produces: a verified `Build succeeded` line, or a precise list of remaining blockers. Either outcome is a valid deliverable; an unverified claim is not.
 
-- [ ] **Step 1: Restore and build from the command line, not the IDE**
+- [x] **Step 1: Restore and build from the command line, not the IDE**
 
 Building on the command line is the point: it produces a machine-checkable result
 that can be pasted into the docs.
@@ -288,7 +304,7 @@ msbuild BrowserForWP.sln /p:Configuration=Debug /p:Platform=ARM /v:minimal
 
 Expected: `Build succeeded.` followed by `0 Error(s)`.
 
-- [ ] **Step 2: If the hand-authored project files are rejected, re-create them in the IDE**
+- [x] **Step 2: If the hand-authored project files are rejected, re-create them in the IDE**
 
 The library `.vbproj` files for `BrowserForWP.Crypto`, `.Core`, `.Localization`
 and `.Net` were **written by hand** and have never been validated by the WP8.1
@@ -303,7 +319,7 @@ or an unrecognised project type:
 
 This is expected work, not a failure — it is what "the SDK has not seen these files" means in practice. Record the exact steps taken in `docs/MAINTAINING.md`.
 
-- [ ] **Step 3: Fix compile errors in this order**
+- [x] **Step 3: Fix compile errors in this order**
 
 Errors will be dominated by one category, so work through them systematically:
 
@@ -311,7 +327,7 @@ Errors will be dominated by one category, so work through them systematically:
 2. **Await on IAsyncAction / IAsyncOperation.** VB supports this directly; if the compiler disagrees, add `Imports System.Runtime.InteropServices.WindowsRuntime` at the top of the file that needs it.
 3. **Nested `Namespace` duplication.** Full name = `<RootNamespace>.` + the file's `Namespace`. `BrowserForWP.Crypto.vbproj` sets `RootNamespace` to `BrowserForWP` because its sources declare `Namespace Crypto`.
 
-- [ ] **Step 4: Confirm the build output exists**
+- [x] **Step 4: Confirm the build output exists**
 
 ```cmd
 dir BrowserForWP\bin\ARM\Debug\BrowserForWP.exe
@@ -328,7 +344,7 @@ sentence left to replace — the section is now "The build that actually works"
 plus the round-by-round record. The VS version is 2013, MSBuild 12.0.40629.0,
 WP8.1 SDK 8.1, Windows 8.1 SDK 8.1.
 
-- [ ] **Step 6: Commit and push**
+- [x] **Step 6: Commit and push**
 
 ```bash
 git add -A
@@ -384,6 +400,12 @@ git push origin HEAD
 
 ### Task 6: Make the maintenance loop enforceable
 
+**Outcome: done, and then kept true.** The verification table and the loop live
+in `.agents/skills/browserforwp/SKILL.md`. Two rows had gone stale by the time the
+build succeeded: they named `BrowserForWP.Crypto.Tests` (**not created**) and
+`BrowserForWP.Core.Tests` (**not created**), and Task 3 of
+`2026-09-28-build-closure.md` replaced them.
+
 **Files:**
 - Modify: `.agents/skills/browserforwp/SKILL.md`
 - Modify: `docs/MAINTAINING.md`
@@ -392,7 +414,7 @@ git push origin HEAD
 - Consumes: `tools/check-vb.mjs` (Task 2).
 - Produces: a skill that states, unambiguously, the loop every future change must follow, so the process does not depend on anyone remembering it.
 
-- [ ] **Step 1: Add the checker to the verification table**
+- [x] **Step 1: Add the checker to the verification table**
 
 In `.agents/skills/browserforwp/SKILL.md`, add a row:
 
@@ -400,7 +422,7 @@ In `.agents/skills/browserforwp/SKILL.md`, add a row:
 | Any `.vb`, `.vbproj`, `.xaml` or `.resw` | `node tools/check-vb.mjs` | `0 finding(s)`, exit code 0 |
 ```
 
-- [ ] **Step 2: Add the mandatory loop section**
+- [x] **Step 2: Add the mandatory loop section**
 
 Append to `.agents/skills/browserforwp/SKILL.md`:
 
@@ -426,17 +448,18 @@ turn ends. A skill that describes a previous version of the project is actively
 harmful, because it is what the next contributor trusts.
 ```
 
-- [ ] **Step 3: Mirror the loop in MAINTAINING.md**
+- [x] **Step 3: Mirror the loop in MAINTAINING.md**
 
 Add the same five steps to `docs/MAINTAINING.md` under `## The loop`, linking to the skill rather than duplicating detail.
 
-- [ ] **Step 4: Prove the skill's own command list is accurate**
+- [x] **Step 4: Prove the skill's own command list is accurate**
 
 Every command quoted in `SKILL.md` must actually run. Execute each and compare
 with its stated expected output:
 
 ```bash
-node tools/check-vb.mjs        # 31 check group(s) run, 0 finding(s)
+node tools/check-vb.mjs        # 36 check group(s) run, 0 finding(s) (31 at the
+                               # time of this step; the count drifts upward)
 node tools/gen-vectors.mjs     # 52 assertions, 0 failure(s)
 node tools/proto/w25519.mjs    # 18 checks, 0 failure(s)
 node tools/check-polyfill.mjs  # is valid ES5
@@ -444,7 +467,7 @@ node tools/check-polyfill.mjs  # is valid ES5
 
 Expected: all four match what the skill claims. Fix the skill, not the claim.
 
-- [ ] **Step 5: Commit and push**
+- [x] **Step 5: Commit and push**
 
 ```bash
 git add .agents/skills/browserforwp/SKILL.md docs/MAINTAINING.md

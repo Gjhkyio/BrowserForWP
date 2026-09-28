@@ -540,8 +540,17 @@ This is precisely the failure the skill file warns about in its own words: *"A s
 
 **The invariant, stated precisely.** The marker is the exact string `not created`. It is applied at two granularities:
 
-- **Operational docs** — `README.md`, `README.it.md`, anything directly under `docs/`, and `.agents/skills/**` — must carry the marker **on the same line** as the mention. These are documents people follow.
+- **Operational docs** — `README.md`, `README.it.md`, anything directly under `docs/`, and `.agents/skills/**` — must carry the marker **in the same paragraph** (blank-line-delimited) as the mention. These are documents people follow.
 - **Plan docs** — `docs/superpowers/plans/*.md` — must carry the marker **somewhere in the file**, in a status note. These are specifications; their file lists describe intended deliverables, and one banner is the right granularity. Rewriting twenty step bodies in a historical plan to add a marker would be noise.
+
+**Correction made during execution.** This step originally required the marker **on
+ the same physical line** as the mention. That is checkable with a plain `grep`,
+ but it is the wrong rule: markdown paragraphs reflow, so satisfying it forced
+ contorted prose — a path stranded at the end of a line purely so a grep would
+ match. The paragraph is the unit a reader actually perceives, and the check is
+ four lines of `awk` rather than a `grep`, which is a small price for prose that
+ does not read as if it were written for a linter. The commands in Step 6 below
+ reflect the paragraph rule.
 
 - [ ] **Step 1: Establish the facts, and enumerate the sites by grep**
 
@@ -770,12 +779,32 @@ Run:
 
 ```bash
 find . -name '*.md' -not -path './docs/superpowers/plans/*' -not -path './.git/*' -print0 \
-  | xargs -0 grep -n "BrowserForWP\.\(Core\|Crypto\)\.Tests" \
-  | grep -v "not created"
+| xargs -0 awk 'BEGIN{RS="";FS="\n"} {
+    par=$0
+    if (par ~ /BrowserForWP\.(Core|Crypto)\.Tests/ && par !~ /not created/)
+      print FILENAME": "substr(par,1,70)
+  }'
 echo "(end)"
 ```
 
-Expected: only `(end)`. Every operational mention must sit on a line that carries the marker; if a line appears above `(end)`, it is still instructing a reader to use a harness that does not exist.
+`RS=""` makes `awk` read blank-line-delimited paragraphs, which is the unit the
+rule is defined over.
+
+Expected: only `(end)`. If a paragraph is printed, it still mentions the project
+without disclosing that it was never created — that is the defect this task
+exists to remove.
+
+- [ ] **Step 6b: Negative control for that check**
+
+A check that has never fired is not a check. Confirm it can fail:
+
+```bash
+printf '# probe\n\nSome text mentioning tests/BrowserForWP.Core.Tests/ as a thing to run.\n' > /tmp/probe.md
+awk 'BEGIN{RS=""} { if ($0 ~ /BrowserForWP\.(Core|Crypto)\.Tests/ && $0 !~ /not created/) print FILENAME": hit" }' /tmp/probe.md
+rm /tmp/probe.md
+```
+
+Expected: `/tmp/probe.md: hit`.
 
 - [ ] **Step 7: Verify the invariant in the plan docs**
 

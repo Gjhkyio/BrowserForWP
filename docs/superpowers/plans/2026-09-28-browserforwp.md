@@ -65,9 +65,14 @@ testing would have caught — they are tabulated in `docs/ARCHITECTURE.md` under
 `tools/proto/tls13.mjs` first and watch it pass against a live host. Do not edit
 the VB and hope.
 
-Still not written, and not needed for the app to build: the two `tests/`
-projects are referenced by this plan but only
-`tests/BrowserForWP.Crypto.Tests/Vectors.generated.vb` exists so far.
+Still **not created**, and not needed for the app to build: this plan names two
+`tests/` projects — `BrowserForWP.Crypto.Tests` and `BrowserForWP.Core.Tests` —
+and neither exists. Only `tests/BrowserForWP.Crypto.Tests/Vectors.generated.vb`
+was ever produced, and it has no consumer. The TDD steps in Tasks 2-13 below
+refer to test files that were never written; the crypto they were meant to cover
+is verified instead by `tools/gen-vectors.mjs` and `tools/proto/tls13.mjs`, and
+`BrowserForWP.Core` has no automated coverage at all. See
+`docs/MAINTAINING.md` § "Where the tests actually are".
 
 ## Global Constraints
 
@@ -106,11 +111,11 @@ projects are referenced by this plan but only
 | `BrowserForWP.Core/Browser/BrowserSession.vb` | Tabs, active tab, desktop-mode state. |
 | `BrowserForWP.Core/Browser/TabModel.vb` | One tab: history, index, title, url. |
 | `BrowserForWP.Core/Browser/AddressNormalizer.vb` | URL vs. search classification, scheme repair. |
-| `BrowserForWP.Polyfill/compat.js` | On-device compatibility layer injected into every document. |
+| `BrowserForWP.Polyfill/compat.js` | On-device compatibility layer. Written and ES5-checked; the injection step was **not created** — nothing loads it into a page. |
 | `BrowserForWP/MainPage.xaml(.vb)` | Browser shell UI. |
 | `BrowserForWP/Strings/en-US/Resources.resw` | English UI strings. |
 | `BrowserForWP/Strings/it-IT/Resources.resw` | Italian UI strings. |
-| `tests/BrowserForWP.Crypto.Tests/` | MSTest project consuming `Vectors.generated.vb`. |
+| `tests/BrowserForWP.Crypto.Tests/` | MSTest project consuming `Vectors.generated.vb`. **not created.** |
 
 ---
 

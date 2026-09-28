@@ -111,7 +111,8 @@ verified if you skipped its command.
 | Any `.vb`, `.vbproj`, `.xaml` or `.resw` | `node tools/check-vb.mjs` | `0 finding(s)`, exit code 0 |
 | `BrowserForWP/Assets/**` | `python3 tools/make_logo.py` | one line per generated PNG, exit code 0 |
 | UI / XAML / VB app code | Build in the guest: `tools\vm-build.cmd /t:Rebuild` | `BUILD_EXIT=0`, no `BC` errors |
-| Crypto unit tests | Test Explorer → run `BrowserForWP.Crypto.Tests` | all tests green |
+| Unexplained build diagnostics | `RUNS=4 bash tools/wmc9999-probe.sh` | `distinct XBF hash pairs across 12 runs: 1` |
+| `BrowserForWP.Core/` logic | No automated harness — build, then verify by hand. See `docs/MAINTAINING.md` § "Where the tests actually are". | honest report, not a green tick |
 | TLS / DoH / sockets | Deploy to handset, run **Diagnostics → TLS probe** | reports negotiated `TLS1.3` |
 
 `node tools/gen-vectors.mjs` is the fastest real signal available off-Windows:
@@ -171,19 +172,39 @@ Worked example: *add a "desktop site" toggle.*
 1. **Plan.** `docs/superpowers/plans/2026-09-28-desktop-site-toggle.md`.
 2. **Decide the layer.** This is browser state + UI, so it lives in
    `BrowserForWP.Core` and `BrowserForWP/`, and touches neither crypto nor TLS.
-3. **Write the failing test first.** In `tests/BrowserForWP.Core.Tests/`:
+3. **Decide how this change can be verified, and be specific.** There is no VB
+   test project in this repository — see `docs/MAINTAINING.md` § "Where the
+   tests actually are" — so "add a unit test" is not available to you. Pick one
+   of these two, and write down which:
 
-   ```vb
-   <TestMethod>
-   Public Sub DesktopMode_ChangesUserAgent()
-       Dim session = New BrowserSession()
-       session.DesktopMode = True
-       Assert.AreEqual(UserAgents.DesktopWindows, session.EffectiveUserAgent)
-   End Sub
+   - **The logic is pure and has no WinRT dependency** (like
+     `AddressNormalizer`, or a user-agent table). Extract it into
+     `BrowserForWP.Core` behind a function whose inputs and outputs are plain
+     strings or integers, then assert its behaviour from a Node script in
+     `tools/` that mirrors that function. This is what
+     `tools/proto/w25519.mjs` does for X25519, and it is the only pattern in
+     this repository that has caught real bugs before they shipped.
+   - **The logic touches XAML, the WebView, or a WinRT API.** Nothing off-device
+     can check it. Say so in the commit message, build in the guest, and write
+     out the exact handset steps a reviewer should repeat. Do not describe this
+     as "tested".
+
+4. **Write the check before the implementation**, whichever you chose. For a pure
+   function that means the Node script, and it must fail first:
+
+   ```bash
+   node tools/proto/desktop-mode.mjs
+   # Expected: FAIL — no such export: effectiveUserAgent
    ```
 
-4. **Run it and watch it fail.** Expected: `BrowserSession` has no
-   `DesktopMode` — a compile error is a valid red result here.
+   For UI work it means writing the manual verification steps down *now*, while
+   you still remember what "correct" looks like, so step 9 has something concrete
+   to check against.
+
+   **Superseded step.** This walkthrough used to say: write a `<TestMethod>` into
+   `tests/BrowserForWP.Core.Tests/` — a project that was **not created** — then
+   run it and watch it fail. The path does not exist. Ignore any reference to it
+   in the example below; the two options above are what is actually available.
 5. **Implement the minimum.** Add the property and the lookup:
 
    ```vb
@@ -196,26 +217,34 @@ Worked example: *add a "desktop site" toggle.*
    End Property
    ```
 
-6. **Run the test.** Expected: PASS.
+6. **Re-run the check from step 4.** Expected: it passes now — the Node script
+   for a pure function, or the guest build plus the manual handset steps for UI
+   work.
 7. **Localize any new user-visible string.** Add the key to **both**
    `BrowserForWP/Strings/en-US/Resources.resw` and
    `BrowserForWP/Strings/it-IT/Resources.resw`. A key present in only one
    language is a bug — see "Adding a language" below.
 8. **Wire the UI.** Add the control to `MainPage.xaml`, its handler to
    `MainPage.xaml.vb`, and bind the label to the resource key.
-9. **Verify.** Build `Debug | ARM` in Visual Studio; deploy; toggle the setting;
-   confirm the server sees the desktop UA.
+9. **Verify.** Build in the guest, then deploy:
+
+   ```bash
+   prlctl exec "{66a2f493-162c-4b3f-ba40-0a26020cc818}" "cmd.exe" "/c" \
+       "C:\Mac\Home\Documents\BrowserForWP\tools\vm-build.cmd /t:Rebuild"
+   ```
+
+   Expected: `=== BUILD_EXIT=0 ===`. Then deploy to a handset and toggle the
+   setting; confirm the server sees the desktop user agent.
 10. **Commit and push.**
 
    ```bash
-   git add tests/BrowserForWP.Core.Tests/DesktopModeTests.vb \
-           BrowserForWP.Core/BrowserSession.vb \
+   git add BrowserForWP.Core/Browser/BrowserSession.vb \
            BrowserForWP/MainPage.xaml BrowserForWP/MainPage.xaml.vb \
            BrowserForWP/Strings/en-US/Resources.resw \
            BrowserForWP/Strings/it-IT/Resources.resw \
            docs/superpowers/plans/2026-09-28-desktop-site-toggle.md
    git commit -m "feat(core): add desktop-site user agent toggle"
-   git push
+   git push origin HEAD
    ```
 
 ## How to modify an existing feature

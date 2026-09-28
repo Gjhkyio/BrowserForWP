@@ -70,9 +70,13 @@ node tools/check-vb.mjs
 python3 tools/make_logo.py
 ```
 
-In Visual Studio, run the `BrowserForWP.Crypto.Tests` project from Test Explorer.
-Those tests consume `Vectors.generated.vb`, which is **generated** — never edit
-it by hand. Regenerate with `node tools/gen-vectors.mjs`.
+Those vectors also produce `tests/BrowserForWP.Crypto.Tests/Vectors.generated.vb`.
+That file is **generated** — never edit it by hand; regenerate it with
+`node tools/gen-vectors.mjs`. The MSTest project it was written for was
+**not created**, so nothing currently asserts it.
+
+See "Where the tests actually are" below before assuming those vectors are being
+checked by a VB test run.
 
 ## Do not use these APIs in BrowserForWP.Crypto
 
@@ -482,13 +486,40 @@ this is the summary.
 
 Then update the skill if any tool, command, file layout or constraint changed.
 
+## Where the tests actually are
+
+**There are no VB unit-test projects.** `2026-09-28-browserforwp.md` specified
+`tests/BrowserForWP.Crypto.Tests/` and `tests/BrowserForWP.Core.Tests/`, both
+**not created**, as MSTest projects with `<TestMethod>` cases. What exists is:
+
+| Path | What it is | Consumed by |
+| --- | --- | --- |
+| `tools/gen-vectors.mjs`, `tools/proto/*.mjs` | The executable prototypes. `gen-vectors.mjs` recomputes HKDF, X25519 and AES-GCM and asserts RFC 5869 / 7748 / 8448 and NIST CAVS vectors; `tls13.mjs` completes real handshakes against live servers. | `node`, on any machine. **This is the real crypto verification.** |
+| `tests/BrowserForWP.Crypto.Tests/Vectors.generated.vb` | Generated VB constants from those same vectors. The project around it is **not created**; this file has no consumer. | — |
+| `tools/check-vb.mjs` | 12 categories of static check over every `.vb`, `.vbproj`, `.xaml` and `.resw`. | `node`, on any machine. |
+| `tools/vm-build.cmd` | The real compiler. | The Windows guest. |
+| `tools/wmc9999-probe.sh` | Build-diagnostic characterisation and XAML output invariance. | `bash`, on the host. |
+
+**This is a real gap, not a documentation problem.** The crypto algorithms are
+covered better off-device than a VB test project would have covered them, because
+the prototypes exercise the *same algorithm* against published vectors and live
+servers — but `BrowserForWP.Core` (address normalisation, history, tab state) and
+the UI have **no automated tests at all**, and the plan's TDD steps for them were
+never honoured. Adding a WP8.1 Unit Test Library and running it in the guest is
+recorded as follow-up work, not attempted here.
+
+Until that exists, do not claim test coverage for `BrowserForWP.Core`. Verify it
+by building and by hand on a handset, and say so.
+
 ## Release checklist
 
 - [ ] `node tools/gen-vectors.mjs` → `52 assertions, 0 failure(s)`
-- [ ] `python3 tools/make_logo.py` → all assets regenerated, no diff
+- [ ] `python3 tools/make_logo.py` → 12 PNGs, all `*.scale-100` / `*.scale-240`, no git diff
 - [ ] Polyfill ES5 check passes
 - [ ] `tools\vm-build.cmd /t:Rebuild` in the guest → `BUILD_EXIT=0`, no `BC` errors
-- [ ] Test Explorer: `BrowserForWP.Crypto.Tests` all green
+- [ ] `node tools/proto/w25519.mjs` → `18 checks, 0 failure(s)`
+- [ ] `node tools/proto/tls13.mjs example.com` → `31 checks, 0 failure(s)`
+- [ ] `RUNS=4 bash tools/wmc9999-probe.sh` → `distinct XBF hash pairs across 12 runs: 1`
 - [ ] Handset: TLS probe reports `TLS 1.3`
 - [ ] Handset: switch the phone to Italian — **every** UI string changes; no
       English leaking through
