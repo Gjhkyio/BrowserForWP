@@ -21,6 +21,9 @@ Namespace Storage
     ''' <summary>Bookmark set keyed by URL.</summary>
     Public NotInheritable Class FavoritesStore
 
+        ''' <summary>Maximum bookmarks kept (speed + memory).</summary>
+        Public Const MaxEntries As Integer = 100
+
         Private ReadOnly _items As New Dictionary(Of String, String)()
 
         Public ReadOnly Property Count As Integer
@@ -34,6 +37,9 @@ Namespace Storage
                 Return False
             End If
             If _items.ContainsKey(pageUrl) Then
+                Return False
+            End If
+            If _items.Count >= MaxEntries Then
                 Return False
             End If
             _items(pageUrl) = If(pageTitle, pageUrl)

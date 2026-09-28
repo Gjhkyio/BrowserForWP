@@ -13,6 +13,9 @@ Namespace Tls13
 
         Private ReadOnly _pins As New Dictionary(Of String, String)()
 
+        ''' <summary>Maximum pins kept (speed + memory).</summary>
+        Public Const MaxPins As Integer = 50
+
         Public ReadOnly Property Count As Integer
             Get
                 Return _pins.Count
@@ -42,6 +45,9 @@ Namespace Tls13
             End If
             If String.IsNullOrEmpty(base64Pin) Then
                 Throw New ArgumentException("pin required", "base64Pin")
+            End If
+            If Not _pins.ContainsKey(cleanHost) AndAlso _pins.Count >= MaxPins Then
+                Throw New InvalidOperationException("pin store full")
             End If
             _pins(cleanHost) = base64Pin
         End Sub
@@ -110,6 +116,9 @@ Namespace Tls13
                 Dim pinPart As String = rawLine.Substring(pipePos + 1)
                 If String.IsNullOrEmpty(hostPart) OrElse String.IsNullOrEmpty(pinPart) Then
                     Continue For
+                End If
+                If _pins.Count >= MaxPins Then
+                    Exit For
                 End If
                 _pins(hostPart) = pinPart
             Next

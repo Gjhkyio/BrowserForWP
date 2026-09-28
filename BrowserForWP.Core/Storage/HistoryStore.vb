@@ -24,7 +24,7 @@ Namespace Storage
     ''' <summary>Bounded in-memory history with string serialization.</summary>
     Public NotInheritable Class HistoryStore
 
-        Public Const MaxEntries As Integer = 200
+        Public Const MaxEntries As Integer = 100
 
         Private ReadOnly _entries As New List(Of HistoryEntry)()
 

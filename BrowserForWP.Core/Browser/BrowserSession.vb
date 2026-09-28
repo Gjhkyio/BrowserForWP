@@ -108,6 +108,9 @@ Namespace Browser
         ''' </summary>
         Public Property DesktopMode As Boolean = False
 
+        ''' <summary>Private mode is session-only and never persisted.</summary>
+        Public Property PrivateMode As Boolean = False
+
         ''' <summary>Effective UA for the session mode (see UserAgents).</summary>
         Public ReadOnly Property EffectiveUserAgent As String
             Get

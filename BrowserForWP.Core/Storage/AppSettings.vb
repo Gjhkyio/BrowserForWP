@@ -8,6 +8,9 @@
 ' checker only recognises a parameterless Set, while real VB setters always
 ' carry a parameter, so an explicit Set block desynchronises its stack.
 ' Empty-guards live in LoadFromMap and at the call sites instead.
+'
+' Lite-first: defaults point at DuckDuckGo Lite, which Trident renders fast.
+' Stored Google/Bing templates from earlier versions migrate to the default.
 
 Imports System.Collections.Generic
 
@@ -16,9 +19,12 @@ Namespace Storage
     ''' <summary>All user-tunable browser settings with safe defaults.</summary>
     Public NotInheritable Class AppSettings
 
-        Public Const DefaultHomepage As String = "https://duckduckgo.com/"
-        Public Const DefaultSearchTemplate As String = "https://duckduckgo.com/?q={q}"
+        Public Const DefaultHomepage As String = "https://lite.duckduckgo.com/lite/"
+        Public Const DefaultSearchTemplate As String = "https://lite.duckduckgo.com/lite/?q={q}"
         Public Const DefaultDohUrl As String = "https://cloudflare-dns.com/dns-query"
+
+        ''' <summary>Maximum tabs kept across a session restore (speed + memory).</summary>
+        Public Const MaxSessionTabs As Integer = 10
 
         Public Sub New()
             Homepage = DefaultHomepage
@@ -26,6 +32,10 @@ Namespace Storage
             DohUrl = DefaultDohUrl
             DesktopMode = False
             LanguageOverride = Nothing
+            NightMode = False
+            BlockTrackers = True
+            RestoreSession = False
+            LastSessionTabs = String.Empty
         End Sub
 
         Public Property Homepage As String
@@ -33,12 +43,68 @@ Namespace Storage
         Public Property DohUrl As String
         Public Property DesktopMode As Boolean
         Public Property LanguageOverride As String
+        Public Property NightMode As Boolean
+        Public Property BlockTrackers As Boolean
+        Public Property RestoreSession As Boolean
+        Public Property LastSessionTabs As String
 
         ''' <summary>Build a search URL from raw query text.</summary>
         Public Function SearchUrlFor(queryText As String) As String
             Dim safeQuery As String = If(queryText, String.Empty)
             Dim templateText As String = If(String.IsNullOrEmpty(SearchTemplate), DefaultSearchTemplate, SearchTemplate)
             Return templateText.Replace("{q}", Uri.EscapeDataString(safeQuery))
+        End Function
+
+        ''' <summary>Tabs saved for restore, http(s) only, capped.</summary>
+        Public Function GetSessionTabs() As List(Of String)
+            Dim result As New List(Of String)()
+            If String.IsNullOrEmpty(LastSessionTabs) Then
+                Return result
+            End If
+            Dim rawLines As String() = LastSessionTabs.Split(New String() {vbLf}, StringSplitOptions.None)
+            For Each rawLine In rawLines
+                Dim cleanLine As String = rawLine.Trim()
+                If cleanLine.StartsWith("http", StringComparison.OrdinalIgnoreCase) Then
+                    result.Add(cleanLine)
+                End If
+                If result.Count >= MaxSessionTabs Then
+                    Exit For
+                End If
+            Next
+            Return result
+        End Function
+
+        ''' <summary>Store tabs for restore: first 10, each truncated to 300 chars.</summary>
+        Public Sub SetSessionTabs(pageUrls As IList(Of String))
+            Dim kept As New List(Of String)()
+            If pageUrls IsNot Nothing Then
+                For Each pageUrl In pageUrls
+                    If String.IsNullOrEmpty(pageUrl) Then
+                        Continue For
+                    End If
+                    Dim cleanUrl As String = pageUrl.Trim()
+                    If cleanUrl.Length > 300 Then
+                        cleanUrl = cleanUrl.Substring(0, 300)
+                    End If
+                    kept.Add(cleanUrl)
+                    If kept.Count >= MaxSessionTabs Then
+                        Exit For
+                    End If
+                Next
+            End If
+            LastSessionTabs = String.Join(vbLf, kept.ToArray())
+        End Sub
+
+        ''' <summary>Legacy heavy search engines migrate to the lite default.</summary>
+        Public Shared Function MigrateSearchTemplate(storedTemplate As String) As String
+            If String.IsNullOrEmpty(storedTemplate) Then
+                Return DefaultSearchTemplate
+            End If
+            Dim loweredTemplate As String = storedTemplate.ToLowerInvariant()
+            If loweredTemplate.Contains("google.") OrElse loweredTemplate.Contains("bing.") Then
+                Return DefaultSearchTemplate
+            End If
+            Return storedTemplate
         End Function
 
         ''' <summary>Export to a plain string map for LocalSettings persistence.</summary>
@@ -49,6 +115,10 @@ Namespace Storage
             hostMap("dohUrl") = If(String.IsNullOrEmpty(DohUrl), DefaultDohUrl, DohUrl)
             hostMap("desktopMode") = If(DesktopMode, "1", "0")
             hostMap("languageOverride") = If(LanguageOverride, String.Empty)
+            hostMap("nightMode") = If(NightMode, "1", "0")
+            hostMap("blockTrackers") = If(BlockTrackers, "1", "0")
+            hostMap("restoreSession") = If(RestoreSession, "1", "0")
+            hostMap("lastSessionTabs") = If(LastSessionTabs, String.Empty)
             Return hostMap
         End Function
 
@@ -66,11 +136,7 @@ Namespace Storage
                 End If
             End If
             If sourceMap.TryGetValue("searchTemplate", foundValue) Then
-                If String.IsNullOrEmpty(foundValue) Then
-                    SearchTemplate = DefaultSearchTemplate
-                Else
-                    SearchTemplate = foundValue
-                End If
+                SearchTemplate = MigrateSearchTemplate(foundValue)
             End If
             If sourceMap.TryGetValue("dohUrl", foundValue) Then
                 If String.IsNullOrEmpty(foundValue) Then
@@ -88,6 +154,22 @@ Namespace Storage
                 Else
                     LanguageOverride = foundValue
                 End If
+            End If
+            If sourceMap.TryGetValue("nightMode", foundValue) Then
+                NightMode = (foundValue = "1")
+            End If
+            If sourceMap.TryGetValue("blockTrackers", foundValue) Then
+                If String.IsNullOrEmpty(foundValue) Then
+                    BlockTrackers = True
+                Else
+                    BlockTrackers = (foundValue = "1")
+                End If
+            End If
+            If sourceMap.TryGetValue("restoreSession", foundValue) Then
+                RestoreSession = (foundValue = "1")
+            End If
+            If sourceMap.TryGetValue("lastSessionTabs", foundValue) Then
+                LastSessionTabs = If(foundValue, String.Empty)
             End If
         End Sub
     End Class
