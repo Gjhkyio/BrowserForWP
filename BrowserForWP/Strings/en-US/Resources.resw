@@ -157,4 +157,77 @@
   <data name="ErrorTlsHandshake" xml:space="preserve">
     <value>The secure connection could not be established.</value>
   </data>
+  <data name="ErrorNavigationFailed" xml:space="preserve">
+    <value>Navigation failed. Check the address and try again.</value>
+  </data>
+
+  <!-- Tabs -->
+  <data name="TabsTitle" xml:space="preserve">
+    <value>Tabs</value>
+  </data>
+
+  <!-- Desktop site -->
+  <data name="DesktopSite" xml:space="preserve">
+    <value>Desktop site</value>
+  </data>
+
+  <!-- History and favorites -->
+  <data name="HistoryTitle" xml:space="preserve">
+    <value>History</value>
+  </data>
+  <data name="FavoritesTitle" xml:space="preserve">
+    <value>Favorites</value>
+  </data>
+  <data name="AddFavorite" xml:space="preserve">
+    <value>Add favorite</value>
+  </data>
+  <data name="RemoveFavorite" xml:space="preserve">
+    <value>Remove favorite</value>
+  </data>
+  <data name="ClearHistory" xml:space="preserve">
+    <value>Clear history</value>
+  </data>
+
+  <!-- Security details -->
+  <data name="SecurityDetails" xml:space="preserve">
+    <value>Security details</value>
+  </data>
+
+  <!-- TLS probe -->
+  <data name="TlsProbeHostLabel" xml:space="preserve">
+    <value>TLS probe host</value>
+  </data>
+  <data name="TlsProbeRun" xml:space="preserve">
+    <value>Run TLS probe now</value>
+  </data>
+
+  <!-- DoH -->
+  <data name="DohServerLabel" xml:space="preserve">
+    <value>DoH server</value>
+  </data>
+
+  <!-- Pinning -->
+  <data name="PinTitle" xml:space="preserve">
+    <value>Certificate pins</value>
+  </data>
+  <data name="PinAdd" xml:space="preserve">
+    <value>Add pin</value>
+  </data>
+  <data name="PinRemove" xml:space="preserve">
+    <value>Remove pin</value>
+  </data>
+  <data name="PinStored" xml:space="preserve">
+    <value>Pin stored.</value>
+  </data>
+  <data name="PinMismatch" xml:space="preserve">
+    <value>Pin mismatch on next probe.</value>
+  </data>
+
+  <!-- Homepage and search -->
+  <data name="HomepageLabel" xml:space="preserve">
+    <value>Homepage</value>
+  </data>
+  <data name="SearchEngineLabel" xml:space="preserve">
+    <value>Search engine</value>
+  </data>
 </root>
