@@ -105,6 +105,9 @@
     <Compile Include="Engine\IBrowserEngine.vb" />
     <Compile Include="Engine\TridentEngine.vb" />
     <Compile Include="Engine\Native\IDocumentFetcher.vb" />
+    <Compile Include="Engine\Native\NodeTypes.vb" />
+    <Compile Include="Engine\Native\HtmlTokenizer.vb" />
+    <Compile Include="Engine\Native\HtmlTreeBuilder.vb" />
     <Compile Include="Storage\AppSettings.vb" />
     <Compile Include="Storage\FavoritesStore.vb" />
     <Compile Include="Storage\HistoryStore.vb" />
