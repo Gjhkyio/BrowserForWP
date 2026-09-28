@@ -219,6 +219,10 @@
                     <TextBlock x:Name="ParseResult" TextWrapping="Wrap"
                                FontFamily="Consolas" FontSize="12"
                                MaxHeight="220" Margin="0,0,0,8" Opacity="0.85"/>
+                    <Button x:Name="RenderNativeButton" Margin="0,0,0,6"
+                            Click="RenderNativeButton_Click"/>
+                    <Border x:Name="NativePreviewHost" Height="320"
+                            BorderThickness="1" Margin="0,0,0,8"/>
                     <Button x:Name="IeModeButton" Margin="0,0,0,6"
                             Click="IeModeButton_Click"/>
                     <TextBlock x:Name="IeModeResult" TextWrapping="Wrap"

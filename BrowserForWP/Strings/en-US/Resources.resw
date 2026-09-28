@@ -296,6 +296,9 @@
   <data name="ReaderFallback" xml:space="preserve">
     <value>Showing simplified article</value>
   </data>
+  <data name="RenderNatively" xml:space="preserve">
+    <value>Render current page natively</value>
+  </data>
   <data name="LiteRedirects" xml:space="preserve">
     <value>Prefer light site versions</value>
   </data>

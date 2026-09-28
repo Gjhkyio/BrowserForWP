@@ -36,6 +36,9 @@
 //   13. Comment hazards        '--' in XML comments, unescaped '<' in doc comments
 //   14. Project flavour        the flavour GUID the IDE uses to resolve references
 //
+//  Group 12's list is not a guess about what the profile removes: every entry in
+//  it was paid for by a guest build that failed. FontStyles is the latest.
+//
 //  WHAT IT CANNOT DO
 //  -----------------
 //  It is not a compiler. It cannot type-check, resolve overloads, verify WinRT
@@ -877,6 +880,11 @@ const PROFILE_HAZARDS = [
     'Microsoft.VisualBasic.ControlChars is not in the Store profile (BC30451), even ' +
     'though Microsoft.VisualBasic.Strings (AscW, ChrW) is. Test whitespace with ' +
     'Char.IsWhiteSpace, or use the numeric Char code.'],
+  [/\bFontStyles\b/,
+    'System.Windows.FontStyles is WPF. The WinRT profile has no FontStyles helper at ' +
+    'all (BC30451): XAML markup resolves FontStyle="Italic" through the enum, and code ' +
+    'must name Windows.UI.Text.FontStyle.Italic / .Normal. Found the hard way by the ' +
+    'guest build, one round after this group was written.'],
 ];
 
 function checkProfileHazards() {

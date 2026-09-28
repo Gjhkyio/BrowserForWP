@@ -180,6 +180,7 @@ Public NotInheritable Class MainPage
         PinAddButton.Content = Localizer.Get("PinAdd")
         PinRemoveButton.Content = Localizer.Get("PinRemove")
         ParsePageButton.Content = Localizer.Get("ParseThisPage")
+        RenderNativeButton.Content = Localizer.Get("RenderNatively")
         IeModeButton.Content = Localizer.Get("IeModeCheck")
 
         DesktopToggle.IsChecked = _session.DesktopMode
@@ -928,6 +929,55 @@ Public NotInheritable Class MainPage
             ParseResult.Text = Localizer.Get("ParseFailed") & " " & ex.Message
         Finally
             ParsePageButton.IsEnabled = True
+        End Try
+    End Sub
+
+    ''' <summary>
+    ''' Fetch the current tab's page over the app's own TLS 1.3 transport and draw it
+    ''' with the native engine. This is the first place where a page is RENDERED from
+    ''' the code in BrowserForWP.Core: the parse button above stops at a box tree, and
+    ''' the WebView never involves Core at all.
+    ''' Types are fully qualified because this file's Imports cover the Core engine and
+    ''' this app's own diagnostics, not Rendering.
+    ''' </summary>
+    Private Async Sub RenderNativeButton_Click(sender As Object, e As RoutedEventArgs)
+        RenderNativeButton.IsEnabled = False
+        Try
+            Dim tabUrl As String = _session.ActiveTab.Url
+            If String.IsNullOrEmpty(tabUrl) Then
+                ParseResult.Text = Localizer.Get("ParseNoDocument")
+                Return
+            End If
+
+            Dim fetcher As New BrowserForWP.Diagnostics.NetDocumentFetcher(_pinTable)
+            Dim response As DocumentResponse = Await fetcher.FetchAsync(tabUrl, _appSettings.DohUrl)
+
+            If Not String.IsNullOrEmpty(response.ErrorMessage) Then
+                ParseResult.Text = Localizer.Get("ParseFailed") & " " & response.ErrorMessage
+                Return
+            End If
+            If Not response.IsHtml Then
+                ParseResult.Text = Localizer.Get("ParseNoDocument")
+                Return
+            End If
+
+            ' The preview is laid out for the width the host actually has. Before the
+            ' first layout pass that is 0, and the fallback keeps the button usable.
+            Dim viewportPx As Double = NativePreviewHost.ActualWidth
+            If viewportPx < 1 Then viewportPx = 360
+
+            Dim boxTree As BoxNode = BoxTreeBuilder.BuildPage(response.Text, InlineStyleText(response.Text))
+            Dim measurer As New BrowserForWP.Rendering.XamlTextMeasurer()
+            Dim laidOut As BrowserForWP.Core.Engine.Native.LayoutBox =
+                BrowserForWP.Core.Engine.Native.BlockLayout.Layout(boxTree, viewportPx, measurer)
+            NativePreviewHost.Child = BrowserForWP.Rendering.XamlBoxRenderer.Render(laidOut)
+
+            ParseResult.Text = CInt(laidOut.WidthPx).ToString() & " x " & CInt(laidOut.HeightPx).ToString() &
+                               "  " & laidOut.DescendantCount().ToString()
+        Catch ex As Exception
+            ParseResult.Text = Localizer.Get("ParseFailed") & " " & ex.Message
+        Finally
+            RenderNativeButton.IsEnabled = True
         End Try
     End Sub
 

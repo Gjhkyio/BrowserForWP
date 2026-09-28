@@ -296,6 +296,9 @@
   <data name="ReaderFallback" xml:space="preserve">
     <value>Articolo semplificato</value>
   </data>
+  <data name="RenderNatively" xml:space="preserve">
+    <value>Disegna la pagina con il motore nativo</value>
+  </data>
   <data name="LiteRedirects" xml:space="preserve">
     <value>Preferisci versioni leggere</value>
   </data>

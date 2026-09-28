@@ -46,10 +46,13 @@ Namespace Rendering
             Else
                 probe.FontWeight = FontWeights.Normal
             End If
+            ' NOT FontStyles.Italic: that helper exists in WPF, not in the WinRT
+            ' profile Windows Phone 8.1 compiles against (BC30451). XAML markup
+            ' resolves FontStyle="Italic" through the enum; code has to name it.
             If style.FontStyle = "italic" Then
-                probe.FontStyle = FontStyles.Italic
+                probe.FontStyle = Windows.UI.Text.FontStyle.Italic
             Else
-                probe.FontStyle = FontStyles.Normal
+                probe.FontStyle = Windows.UI.Text.FontStyle.Normal
             End If
             Return probe
         End Function
