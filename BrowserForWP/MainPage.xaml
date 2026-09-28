@@ -8,87 +8,106 @@
     mc:Ignorable="d"
     Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
 
+    <!--
+        A Page's Content property can be set exactly ONCE, so the layout grid and
+        the settings overlay must be siblings inside a single root container.
+
+        Having them as two direct children of <Page> is the error
+        "The property 'Content' can only be set once", and its consequences are
+        far larger than one line: the XAML compiler rejects the file, so
+        MainPage.g.vb is never generated, which means every x:Name field below
+        (AddressBox, GoButton, ContentHost, ...) is reported as "not declared" in
+        the code-behind, and the project has no generated entry point either.
+        One structural mistake, roughly seventy cascading errors.
+
+        Declaring the overlay AFTER the layout grid is also what gives it the
+        correct z-order: later siblings draw on top.
+    -->
     <Grid>
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
-        </Grid.RowDefinitions>
 
-        <!-- ── Address bar ─────────────────────────────────────────────── -->
-        <Grid Grid.Row="0" Margin="8,8,8,4">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="Auto"/>
-            </Grid.ColumnDefinitions>
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
 
-            <Border Grid.Column="0"
-                    Background="{ThemeResource TextBoxBackgroundThemeBrush}"
-                    CornerRadius="4" Padding="4,0">
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <!-- Security state; text is set in code-behind from the
-                         engine's honest capability report. -->
-                    <TextBlock x:Name="SecurityGlyph" FontSize="14"
-                               VerticalAlignment="Center" Margin="4,0"
-                               Text="&#x26A0;"/>
-                    <TextBox x:Name="AddressBox" BorderThickness="0" Width="300"
-                             VerticalAlignment="Center"
-                             InputScope="Url"
-                             AcceptsReturn="False"
-                             KeyDown="AddressBox_KeyDown"
-                             GotFocus="AddressBox_GotFocus"
-                             LostFocus="AddressBox_LostFocus"/>
-                </StackPanel>
-            </Border>
+            <!-- ── Address bar ─────────────────────────────────────────────── -->
+            <Grid Grid.Row="0" Margin="8,8,8,4">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
 
-            <Button Grid.Column="1" x:Name="GoButton"
-                    Click="GoButton_Click" Margin="6,0,0,0"/>
+                <Border Grid.Column="0"
+                        Background="{ThemeResource TextBoxBackgroundThemeBrush}"
+                        CornerRadius="4" Padding="4,0">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <!-- Security state; text is set in code-behind from the
+                             engine's honest capability report. -->
+                        <TextBlock x:Name="SecurityGlyph" FontSize="14"
+                                   VerticalAlignment="Center" Margin="4,0"
+                                   Text="&#x26A0;"/>
+                        <TextBox x:Name="AddressBox" BorderThickness="0" Width="300"
+                                 VerticalAlignment="Center"
+                                 InputScope="Url"
+                                 AcceptsReturn="False"
+                                 KeyDown="AddressBox_KeyDown"
+                                 GotFocus="AddressBox_GotFocus"
+                                 LostFocus="AddressBox_LostFocus"/>
+                    </StackPanel>
+                </Border>
+
+                <Button Grid.Column="1" x:Name="GoButton"
+                        Click="GoButton_Click" Margin="6,0,0,0"/>
+            </Grid>
+
+            <!-- ── Progress ────────────────────────────────────────────────── -->
+            <ProgressBar Grid.Row="1" x:Name="LoadProgress" Height="3"
+                         IsIndeterminate="False" Minimum="0" Maximum="100" Value="0"/>
+
+            <!-- ── Content: the engine's control is injected here ───────────── -->
+            <Border Grid.Row="2" x:Name="ContentHost"/>
+
+            <!-- ── Command bar ─────────────────────────────────────────────── -->
+            <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="8">
+                <Button x:Name="BackButton" Click="BackButton_Click" Margin="0,0,6,0"/>
+                <Button x:Name="ForwardButton" Click="ForwardButton_Click" Margin="0,0,6,0"/>
+                <Button x:Name="ReloadButton" Click="ReloadButton_Click" Margin="0,0,6,0"/>
+                <Button x:Name="TabsButton" Click="TabsButton_Click" Margin="0,0,6,0"/>
+                <Button x:Name="SettingsButton" Click="SettingsButton_Click"/>
+            </StackPanel>
         </Grid>
 
-        <!-- ── Progress ────────────────────────────────────────────────── -->
-        <ProgressBar Grid.Row="1" x:Name="LoadProgress" Height="3"
-                     IsIndeterminate="False" Minimum="0" Maximum="100" Value="0"/>
+        <!-- ── Settings / diagnostics overlay ────────────────────────────── -->
+        <Grid x:Name="SettingsOverlay" Visibility="Collapsed"
+              Background="#CC000000">
+            <Border Background="{ThemeResource ApplicationPageBackgroundThemeBrush}"
+                    Padding="16" Margin="24" CornerRadius="8"
+                    VerticalAlignment="Center">
+                <StackPanel>
+                    <TextBlock x:Name="SettingsTitle" FontSize="24" Margin="0,0,0,12"/>
 
-        <!-- ── Content: the engine's control is injected here ───────────── -->
-        <Border Grid.Row="2" x:Name="ContentHost"/>
+                    <!-- Language -->
+                    <TextBlock x:Name="LanguageLabel" Margin="0,0,0,4"/>
+                    <ComboBox x:Name="LanguagePicker" Width="280"
+                              SelectionChanged="LanguagePicker_SelectionChanged"/>
 
-        <!-- ── Command bar ─────────────────────────────────────────────── -->
-        <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="8">
-            <Button x:Name="BackButton" Click="BackButton_Click" Margin="0,0,6,0"/>
-            <Button x:Name="ForwardButton" Click="ForwardButton_Click" Margin="0,0,6,0"/>
-            <Button x:Name="ReloadButton" Click="ReloadButton_Click" Margin="0,0,6,0"/>
-            <Button x:Name="TabsButton" Click="TabsButton_Click" Margin="0,0,6,0"/>
-            <Button x:Name="SettingsButton" Click="SettingsButton_Click"/>
-        </StackPanel>
-    </Grid>
+                    <!-- Engine + diagnostics, filled in from EngineCapabilities -->
+                    <TextBlock x:Name="DiagnosticsTitle" FontSize="18" Margin="0,16,0,4"/>
+                    <TextBlock x:Name="EngineText" TextWrapping="Wrap" Margin="0,0,0,8"
+                               Opacity="0.8"/>
 
-    <!-- ── Settings / diagnostics overlay ────────────────────────────── -->
-    <Grid x:Name="SettingsOverlay" Visibility="Collapsed"
-          Background="#CC000000">
-        <Border Background="{ThemeResource ApplicationPageBackgroundThemeBrush}"
-                Padding="16" Margin="24" CornerRadius="8"
-                VerticalAlignment="Center">
-            <StackPanel>
-                <TextBlock x:Name="SettingsTitle" FontSize="24" Margin="0,0,0,12"/>
+                    <Button x:Name="CompatProbeButton" Margin="0,0,0,6"
+                            Click="CompatProbeButton_Click"/>
+                    <TextBlock x:Name="CompatProbeResult" TextWrapping="Wrap"
+                               Opacity="0.8" Margin="0,0,0,8"/>
 
-                <!-- Language -->
-                <TextBlock x:Name="LanguageLabel" Margin="0,0,0,4"/>
-                <ComboBox x:Name="LanguagePicker" Width="280"
-                          SelectionChanged="LanguagePicker_SelectionChanged"/>
+                    <Button x:Name="CloseSettingsButton" Click="CloseSettingsButton_Click"/>
+                </StackPanel>
+            </Border>
+        </Grid>
 
-                <!-- Engine + diagnostics, filled in from EngineCapabilities -->
-                <TextBlock x:Name="DiagnosticsTitle" FontSize="18" Margin="0,16,0,4"/>
-                <TextBlock x:Name="EngineText" TextWrapping="Wrap" Margin="0,0,0,8"
-                           Opacity="0.8"/>
-
-                <Button x:Name="CompatProbeButton" Margin="0,0,0,6"
-                        Click="CompatProbeButton_Click"/>
-                <TextBlock x:Name="CompatProbeResult" TextWrapping="Wrap"
-                           Opacity="0.8" Margin="0,0,0,8"/>
-
-                <Button x:Name="CloseSettingsButton" Click="CloseSettingsButton_Click"/>
-            </StackPanel>
-        </Border>
     </Grid>
 </Page>

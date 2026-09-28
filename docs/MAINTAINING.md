@@ -183,11 +183,41 @@ not a compiler.
 
 ### Status of the build
 
-**These sources have never been compiled.** The development host is an Apple
-silicon Mac, and the available Windows 11 VM is Arm64 (`BIOS type: efi-arm64`),
-which cannot host the toolchain. Replace this paragraph with the real MSBuild
-transcript, including the Visual Studio and SDK versions, the first time a build
-succeeds. Do not paraphrase it — the entire value is that it is a real record.
+**A real build has been run, from Visual Studio inside the Windows VM, over the
+Parallels shared folder** (`C:\Mac\Home\Documents\BrowserForWP\...`). It did not
+succeed. This section is the record; keep it current rather than aspirational.
+
+The Visual Studio version and SDK build numbers were not captured — fill them in
+on the next attempt.
+
+**Observed failures and what they meant.** Approximately 78 errors, but they
+were the product of two defects:
+
+| Symptom | Real cause | Fix applied |
+| --- | --- | --- |
+| `The property "Content" can only be set once. MainPage.xaml (1,1)` | `MainPage.xaml` had **two direct children of `<Page>`** (the layout grid and the settings overlay). `Page.Content` can hold one object. | Wrapped both in a single root `<Grid>`; the overlay is declared second so it still draws on top. |
+| `'Sub Main' was not found`, `'InitializeComponent' is not declared`, and ~65 × `'<Name>' is not declared` | **Consequences of the first row.** The XAML compiler rejected `MainPage.xaml`, so `MainPage.g.vb` was never generated — no partial class, therefore no `x:Name` fields and no generated entry point. | Same fix. |
+| `Value '128274' cannot be converted to 'Char'` (×2) | `ChrW(&H1F512)` / `ChrW(&H1F513)`. Those are supplementary-plane code points; a `Char` is 16 bits. | `Char.ConvertFromUtf32`. |
+| `'Localization' is not declared`; `Type 'IBrowserEngine' / 'BrowserSession' / 'TridentEngine' is not defined`; `The referenced component 'BrowserForWP.Core' / '.Crypto' / '.Localization' could not be found` | The three library projects produced no referenceable assembly. Likely because they declared no `TargetPlatformIdentifier`, so a WP8.1 app cannot resolve them as references. | Added `<TargetPlatformIdentifier>WindowsPhoneApp</TargetPlatformIdentifier>` to all four library projects. |
+| `Impossibile trovare il percorso specificato.` (no file attributed) | A project-level build step failed. Building over a Parallels **shared folder** is the prime suspect: MSBuild and the XAML/PRI compiler are unreliable on that path. | **Copy the repository to local disk in the guest and build there.** |
+
+**The lesson worth keeping:** the two defects in rows 1 and 3 were the whole
+story, and row 1's error message understates it by an order of magnitude. When a
+build produces dozens of unidentified-identifier errors, look for the one
+structural failure that stopped code generation before reading any of them.
+
+### Build from local disk, not the shared folder
+
+Do this before debugging anything else:
+
+```cmd
+xcopy /E /I /Y "C:\Mac\Home\Documents\BrowserForWP" "C:\dev\BrowserForWP"
+cd /d C:\dev\BrowserForWP
+msbuild BrowserForWP.sln /p:Configuration=Debug /p:Platform=ARM /v:minimal
+```
+
+Then copy the repository back (or work from git) rather than building in place.
+A failure with no file path attached is almost always the toolchain, not the code.
 
 ### Known first-build risks
 

@@ -194,10 +194,23 @@ Public NotInheritable Class MainPage
         Dim url = _session.ActiveTab.Url
         Dim isHttps = url IsNot Nothing AndAlso url.StartsWith("https://", StringComparison.OrdinalIgnoreCase)
 
+        ' U+1F512 (locked) and U+1F513 (unlocked) are SUPPLEMENTARY-plane
+        ' characters: above &HFFFF, so they do not fit in a Char and ChrW cannot
+        ' produce them. The compiler rejects ChrW(&H1F512) with "Value '128274'
+        ' cannot be converted to 'Char'". Char.ConvertFromUtf32 returns the
+        ' surrogate pair as a String, which is the correct type for .Text.
+        '
+        ' Caveat, deliberately left visible: supplementary-plane glyphs are not
+        ' guaranteed to exist in the fonts shipped on a Windows Phone 8.1
+        ' handset. If the glyphs do not render there, replace these with a short
+        ' localized word from the resource files rather than pretending a
+        ' padlock appeared. That has not been verified on a device.
         If isHttps Then
-            SecurityGlyph.Text = If(_engine.Capabilities.SupportsTls13, ChrW(&H1F512), ChrW(&H1F513))
+            SecurityGlyph.Text = If(_engine.Capabilities.SupportsTls13,
+                                    Char.ConvertFromUtf32(&H1F512),
+                                    Char.ConvertFromUtf32(&H1F513))
         Else
-            SecurityGlyph.Text = ChrW(&H26A0)   ' warning
+            SecurityGlyph.Text = ChrW(&H26A0)   ' warning, BMP, fits in a Char
         End If
     End Sub
 

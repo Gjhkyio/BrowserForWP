@@ -360,12 +360,12 @@ function checkProjectParity() {
       .map((f) => path.relative(project.dir, f).split(path.sep).join('/'))
       .sort();
 
-    // `App.xaml` is deliberately absent from the item list in some templates and
-    // is picked up by the SDK targets, so it is not a parity defect.
-    const IGNORED = new Set(['App.xaml']);
-
+    // No exceptions. An earlier version of this tool ignored App.xaml, which was
+    // wrong: App.xaml belongs in <ApplicationDefinition>, and a missing one means
+    // no generated entry point at all. Silencing that finding hid nothing here,
+    // but the habit is what hides the next real defect.
     const declared = new Set(project.declaredItems);
-    const missing = onDisk.filter((f) => !declared.has(f) && !IGNORED.has(f));
+    const missing = onDisk.filter((f) => !declared.has(f));
     const phantom = project.declaredItems.filter((f) =>
       /(\.vb|\.xaml|\.resw)$/.test(f) && !fs.existsSync(path.join(project.dir, f)));
 
@@ -502,6 +502,91 @@ function checkXamlHandlers() {
   if (!anyBad) ok('every event handler named in XAML is defined in its code-behind');
 }
 
+// ── 8. XAML single root child ──────────────────────────────────────────────
+// A ContentControl (Page, UserControl, Window) can have exactly ONE Content.
+// Two direct children is the error "The property 'Content' can only be set
+// once", and the damage is much larger than the message suggests: the XAML
+// compiler rejects the file, so the generated .g.vb is never produced, so every
+// x:Name field becomes "not declared" in the code-behind and the project loses
+// its generated entry point. One structural mistake, dozens of errors — which is
+// exactly why it is worth a dedicated check.
+function countRootChildren(xml, rootTag) {
+  const tagPattern = /<(\/?)([A-Za-z][\w.:]*)((?:"[^"]*"|'[^']*'|[^>])*?)(\/?)>/g;
+  let depth = 0;
+  let children = 0;
+  let match;
+  let seenRoot = false;
+  while ((match = tagPattern.exec(xml)) !== null) {
+    const isClosing = match[1] === '/';
+    const name = match[2];
+    const isSelfClosing = match[4] === '/';
+
+    if (isClosing) { depth--; continue; }
+    if (!seenRoot) { seenRoot = true; depth = 1; continue; }   // the root itself
+    if (isSelfClosing) {
+      if (depth === 1) children++;
+      continue;
+    }
+    if (depth === 1) children++;
+    depth++;
+  }
+  return children;
+}
+
+function checkXamlRoot() {
+  heading('XAML single root child');
+  checksRun++;
+  let anyBad = false;
+
+  for (const xaml of walk(ROOT, (f) => f.endsWith('.xaml'))) {
+    const body = fs.readFileSync(xaml, 'utf8').replace(/<!--[\s\S]*?-->/g, '');
+    const root = /<([A-Za-z][\w.:]*)/.exec(body);
+    if (!root) continue;
+
+    const children = countRootChildren(body, root[1]);
+    if (children > 1) {
+      fail('xaml-root', xaml,
+        `root <${root[1]}> has ${children} direct children; a ContentControl can hold only one. ` +
+        'Wrap them in a single container — otherwise the XAML compiler rejects the file, the ' +
+        'generated .g.vb is never created, and every x:Name field becomes "not declared".');
+      anyBad = true;
+    }
+  }
+  if (!anyBad) ok('every XAML file has exactly one root child');
+}
+
+// ── 9. Char-range literals ────────────────────────────────────────────────
+// ChrW and Chr return a Char, which is 16 bits. A supplementary-plane code point
+// such as U+1F512 (128274) does not fit, and the compiler says so in a way that
+// is easy to misread: "Value '128274' cannot be converted to 'Char'". The fix is
+// Char.ConvertFromUtf32, which returns a String.
+function checkCharLiterals() {
+  heading('Char-range literals');
+  checksRun++;
+  let anyBad = false;
+
+  for (const project of projects) {
+    for (const src of walk(project.dir, (f) => f.endsWith('.vb'))) {
+      const lines = cleanLines(fs.readFileSync(src, 'utf8'));
+      lines.forEach((line, idx) => {
+        const pattern = /\bChrW?\s*\(\s*(?:&H([0-9A-Fa-f]+)|(\d+))\s*\)/g;
+        let match;
+        while ((match = pattern.exec(line)) !== null) {
+          const value = match[1] ? parseInt(match[1], 16) : parseInt(match[2], 10);
+          if (value > 0xffff) {
+            fail('char-range', src,
+              `${match[0]} is ${value}, above &HFFFF. A Char is 16 bits, so this cannot compile. ` +
+              'Use Char.ConvertFromUtf32(...) — but check the handset fonts cover the glyph.',
+              idx + 1);
+            anyBad = true;
+          }
+        }
+      });
+    }
+  }
+  if (!anyBad) ok('no ChrW/Chr call exceeds the 16-bit range of a Char');
+}
+
 // ── Run ────────────────────────────────────────────────────────────────────
 console.log('VB.NET structural checker — BrowserForWP');
 console.log('(This is NOT a compiler. See the header for exactly what it proves.)');
@@ -518,6 +603,8 @@ checkNamespacesAndImports();
 checkImplements();
 checkResourceParity();
 checkXamlHandlers();
+checkXamlRoot();
+checkCharLiterals();
 
 console.log(`\n${checksRun} check group(s) run, ${findings.length} finding(s).`);
 if (findings.length > 0) {
