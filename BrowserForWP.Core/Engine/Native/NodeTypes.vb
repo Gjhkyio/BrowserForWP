@@ -200,4 +200,35 @@ Namespace Engine.Native
         End Property
     End Class
 
+    Public Enum BoxKind
+        Block
+        Inline
+        Text
+    End Enum
+
+    ''' <summary>
+    ''' One node of the box tree: a block box, an inline box, or a text run.
+    ''' Phase 2's layout consumes only this -- it never sees HTML again.
+    ''' </summary>
+    Public NotInheritable Class BoxNode
+
+        Public Property Kind As BoxKind
+        Public Property TagName As String = String.Empty
+        Public Property Text As String = String.Empty
+        Public Property Style As ComputedStyle
+        Public Property Children As New List(Of BoxNode)()
+        Public Property Parent As BoxNode
+
+        ''' <summary>True for a block generated to hold a stray inline run.</summary>
+        Public Property Anonymous As Boolean
+
+        Public Function DescendantCount() As Integer
+            Dim total As Integer = Children.Count
+            For Each childItem In Children
+                total += childItem.DescendantCount()
+            Next
+            Return total
+        End Function
+    End Class
+
 End Namespace
