@@ -35,9 +35,15 @@
 //   12. Profile hazards        APIs absent from .NET for Windows Store apps
 //   13. Comment hazards        '--' in XML comments, unescaped '<' in doc comments
 //   14. Project flavour        the flavour GUID the IDE uses to resolve references
+//   15. Privileged access      JIT, process creation, full-trust capabilities
 //
 //  Group 12's list is not a guess about what the profile removes: every entry in
 //  it was paid for by a guest build that failed. FontStyles is the latest.
+//
+//  Group 15 is the opposite and says so: none of its entries has ever broken a
+//  build in this repository, because none of them has ever been written. They are
+//  derived from docs/ARCHITECTURE.md Law 4, so their provenance is reasoning
+//  rather than a compiler, and a reader should weigh them accordingly.
 //
 //  WHAT IT CANNOT DO
 //  -----------------
@@ -976,6 +982,101 @@ function checkCommentHazards() {
   if (!anyBad) ok('no "--" in XML comments and no unescaped "<" in doc comments');
 }
 
+// ── 15. Privileged access: the APIs and capabilities Law 4 closes ────────
+// Two families, one question — is anything here asking for privilege the
+// platform cannot grant?
+//
+//  * APIs that would try to leave the container: a JIT, a helper process, a
+//    hand-loaded native binary, writable+executable pages.
+//  * Capabilities that would ASK for that privilege. Privilege is declared at
+//    package time, so the manifest is the only place such a request could
+//    appear, and this group refuses it here rather than at certification.
+//
+// `tools/proto/sandbox-escape.mjs` is the decision record behind this group, and
+// it is not a duplicate: that one pins the EXACT capability set the package
+// declares — so adding even a benign capability is a finding there — and asserts
+// that the reasoning is still written down. This one is the cheap guard that
+// runs on every `.vb` edit and on any manifest change.
+//
+// Comments and string literals are stripped by cleanLines before any of this, on
+// purpose: an earlier checker in this repository read a comment and so forbade
+// documenting the very rule it enforced. Do not "fix" that by scanning raw text.
+const PRIVILEGED_APIS = [
+  [/\bReflection\.Emit\b/,
+    'System.Reflection.Emit is not in the .NET for Windows Store apps profile ' +
+    '(BC30002/BC30451), and there is no JIT to reach for anyway: an AppContainer ' +
+    'denies writable+executable pages. See docs/ARCHITECTURE.md Law 4.'],
+  [/\b(CreateProcess|CreateProcessAsUser|CreateProcessWithLogonW|CreateProcessWithTokenW)\b/,
+    'an AppContainer app cannot create a process, and a child of one is created ' +
+    'in the same container, so the helper would be sandboxed too. A P/Invoke to ' +
+    'this cannot succeed. See docs/ARCHITECTURE.md Law 4.'],
+  [/\bDiagnostics\.Process\b|\bProcess\.Start\b/,
+    'System.Diagnostics.Process is not in the Store profile, and an AppContainer ' +
+    'cannot start a process. See docs/ARCHITECTURE.md Law 4.'],
+  [/\bShellExecute(Ex)?\b/,
+    'shell activation is not reachable from an AppContainer. Use ' +
+    'Windows.System.Launcher, which goes through the shell contracts.'],
+  [/\bLoadLibrary(Ex)?\b/,
+    'an AppContainer cannot load an arbitrary native binary. That is Law 1\'s ' +
+    'reason for there being no Chromium or Gecko port for this OS.'],
+  [/\bVirtualAlloc(Ex)?\b|\bVirtualProtect(Ex)?\b/,
+    'writable+executable memory is exactly what an AppContainer refuses, so this ' +
+    'is the hand-rolled route to a JIT and it cannot work here. Law 4.'],
+];
+
+// Forbidden by name rather than by allow-list. The allow-list itself lives in
+// tools/proto/sandbox-escape.mjs, where a new capability is meant to be noticed.
+const PRIVILEGED_CAPABILITIES = [
+  ['runFullTrust',
+    'a restricted Windows 10 capability. It is not grantable to a WP8.1 package ' +
+    'and it requires a Microsoft signature, so requesting it is not a fix for ' +
+    'Law 4.'],
+  ['codeGeneration',
+    'the Windows 10 capability that lifts the dynamic-code ban. It does not exist ' +
+    'for an 8.1 package. Law 4.'],
+  ['allowElevation',
+    'requests elevation for a desktop-bridge process; no such thing exists in the ' +
+    'WP8.1 manifest schema. Law 4.'],
+  ['packageManagement',
+    'installing or managing packages needs a privilege this platform does not ' +
+    'grant an app.'],
+];
+
+function checkPrivilegedAccess() {
+  heading('Privileged access (JIT, process creation, full-trust capabilities)');
+  checksRun++;
+  let anyBad = false;
+
+  for (const project of projects) {
+    for (const src of walk(project.dir, (f) => f.endsWith('.vb'))) {
+      const lines = cleanLines(fs.readFileSync(src, 'utf8'));
+      lines.forEach((line, idx) => {
+        for (const [pattern, message] of PRIVILEGED_APIS) {
+          if (pattern.test(line)) {
+            fail('privilege', src, `${line.trim()} — ${message}`, idx + 1);
+            anyBad = true;
+          }
+        }
+      });
+    }
+  }
+
+  for (const manifest of walk(ROOT, (f) => f.endsWith('.appxmanifest'))) {
+    fs.readFileSync(manifest, 'utf8').split(/\r?\n/).forEach((line, idx) => {
+      for (const [name, message] of PRIVILEGED_CAPABILITIES) {
+        const re = new RegExp(`<(?:[a-zA-Z]+:)?Capability\\s+Name=["']${name}["']`);
+        if (re.test(line)) {
+          fail('privilege', manifest,
+            `<Capability Name="${name}" /> — ${message}`, idx + 1);
+          anyBad = true;
+        }
+      }
+    });
+  }
+
+  if (!anyBad) ok('no JIT, no process creation, no privileged capability anywhere');
+}
+
 // ── Run ────────────────────────────────────────────────────────────────────
 console.log('VB.NET structural checker — BrowserForWP');
 console.log('(This is NOT a compiler. See the header for exactly what it proves.)');
@@ -999,6 +1100,7 @@ checkCharLiterals();
 checkVb12Syntax();
 checkProfileHazards();
 checkCommentHazards();
+checkPrivilegedAccess();
 
 console.log(`\n${checksRun} check group(s) run, ${findings.length} finding(s).`);
 if (findings.length > 0) {
@@ -1009,7 +1111,7 @@ if (findings.length > 0) {
   }
   process.exit(1);
 }
-console.log('\nNo mechanical defects found in the fourteen checked categories.');
+console.log('\nNo mechanical defects found in the fifteen checked categories.');
 console.log('This still does NOT mean the project compiles. Build it for real:');
 console.log('');
 console.log('  prlctl exec "{66a2f493-162c-4b3f-ba40-0a26020cc818}" "cmd.exe" "/c" \\');
