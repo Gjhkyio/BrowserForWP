@@ -25,6 +25,8 @@ for (const marker of ['MapShim', 'SetShim', 'WeakMap', 'SymbolShim',
 }
 const compatBytes = Buffer.byteLength(compat, 'utf8');
 check(`compat.js <= 40KB (is ${compatBytes})`, compatBytes <= 40960);
+check('no strict-this global bug', !compat.includes('var globalScope = this;'));
+check('window passed as argument', compat.includes("typeof window !== 'undefined' ? window"));
 
 // 2. Redirect-rule mirror (must match LiteRedirects.vb exactly).
 function redirectUrl(pageUrl) {
