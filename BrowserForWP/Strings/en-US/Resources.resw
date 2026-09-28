@@ -230,4 +230,36 @@
   <data name="SearchEngineLabel" xml:space="preserve">
     <value>Search engine</value>
   </data>
+
+  <!-- Lightweight modes -->
+  <data name="ReadingMode" xml:space="preserve">
+    <value>Reading mode</value>
+  </data>
+  <data name="NightMode" xml:space="preserve">
+    <value>Night mode</value>
+  </data>
+  <data name="Find" xml:space="preserve">
+    <value>Find</value>
+  </data>
+  <data name="Share" xml:space="preserve">
+    <value>Share</value>
+  </data>
+  <data name="PrivateMode" xml:space="preserve">
+    <value>Private mode</value>
+  </data>
+  <data name="BlockTrackers" xml:space="preserve">
+    <value>Block trackers</value>
+  </data>
+  <data name="RestoreSession" xml:space="preserve">
+    <value>Restore tabs on start</value>
+  </data>
+  <data name="Diagnostics" xml:space="preserve">
+    <value>Diagnostics</value>
+  </data>
+  <data name="FindNoMatch" xml:space="preserve">
+    <value>Not found</value>
+  </data>
+  <data name="BlockedTracker" xml:space="preserve">
+    <value>Blocked tracker</value>
+  </data>
 </root>

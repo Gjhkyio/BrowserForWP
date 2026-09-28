@@ -9,6 +9,7 @@ Imports BrowserForWP.Core.Engine
 Imports BrowserForWP.Core.Storage
 Imports BrowserForWP.Localization
 Imports BrowserForWP.Net.Tls13
+Imports Windows.ApplicationModel.DataTransfer
 Imports Windows.Phone.UI.Input
 Imports Windows.Storage
 Imports Windows.UI.Xaml
@@ -37,6 +38,7 @@ Public NotInheritable Class MainPage
         MyBase.OnNavigatedTo(e)
 
         AddHandler HardwareButtons.BackPressed, AddressOf OnHardwareBackPressed
+        AddHandler DataTransferManager.GetForCurrentView().DataRequested, AddressOf OnShareRequested
 
         ContentHost.Child = DirectCast(_engine.Source, UIElement)
         Dim tridentView As TridentEngine = DirectCast(_engine, TridentEngine)
@@ -46,8 +48,7 @@ Public NotInheritable Class MainPage
 
         _searchTemplates = New String() {
             "https://duckduckgo.com/?q={q}",
-            "https://www.bing.com/search?q={q}",
-            "https://www.google.com/search?q={q}"
+            "https://lite.duckduckgo.com/lite/?q={q}"
         }
 
         LoadPersistedState()
@@ -58,14 +59,25 @@ Public NotInheritable Class MainPage
         RefreshHistoryList()
         RefreshFavoritesList()
 
-        _session.NewTab()
         _session.DesktopMode = _appSettings.DesktopMode
-        _engine.Navigate(_appSettings.Homepage)
+        Dim restoredTabs As List(Of String) = _appSettings.GetSessionTabs()
+        If _appSettings.RestoreSession AndAlso restoredTabs.Count > 0 Then
+            For Each restoredUrl In restoredTabs
+                _session.NewTab()
+                _session.ActiveTab.PushHistory(restoredUrl)
+            Next
+            _session.ActivateTab(_session.Tabs.Count - 1)
+            _engine.Navigate(_session.ActiveTab.Url)
+        Else
+            _session.NewTab()
+            _engine.Navigate(_appSettings.Homepage)
+        End If
     End Sub
 
     Protected Overrides Sub OnNavigatedFrom(e As NavigationEventArgs)
         MyBase.OnNavigatedFrom(e)
         RemoveHandler HardwareButtons.BackPressed, AddressOf OnHardwareBackPressed
+        RemoveHandler DataTransferManager.GetForCurrentView().DataRequested, AddressOf OnShareRequested
         SavePersistedState()
     End Sub
 
@@ -120,6 +132,11 @@ Public NotInheritable Class MainPage
         ReloadButton.Content = Localizer.Get("Reload")
         StopButton.Content = Localizer.Get("Stop")
         TabsButton.Content = Localizer.Get("NewTab") & " (" & _session.Tabs.Count & ")"
+        FindButton.Content = Localizer.Get("Find")
+        ReadingButton.Content = Localizer.Get("ReadingMode")
+        ShareButton.Content = Localizer.Get("Share")
+        FindNextButton.Content = Localizer.Get("Find")
+        FindCloseButton.Content = Localizer.Get("DiagnosticsClose")
         SecurityDetailsButton.Content = Localizer.Get("SecurityDetails")
         SettingsButton.Content = Localizer.Get("Settings")
 
@@ -128,7 +145,13 @@ Public NotInheritable Class MainPage
         DiagnosticsTitle.Text = Localizer.Get("DiagnosticsEngineLabel")
         CompatProbeButton.Content = Localizer.Get("DiagnosticsCompatProbe")
         CloseSettingsButton.Content = Localizer.Get("DiagnosticsClose")
+        DiagnosticsButton.Content = Localizer.Get("Diagnostics")
+        DiagnosticsBackButton.Content = Localizer.Get("Back")
         DesktopToggle.Content = Localizer.Get("DesktopSite")
+        PrivateModeToggle.Content = Localizer.Get("PrivateMode")
+        NightModeToggle.Content = Localizer.Get("NightMode")
+        BlockTrackersToggle.Content = Localizer.Get("BlockTrackers")
+        RestoreSessionToggle.Content = Localizer.Get("RestoreSession")
         HomepageLabel.Text = Localizer.Get("HomepageLabel")
         SearchEngineLabel.Text = Localizer.Get("SearchEngineLabel")
         TabsTitle.Text = Localizer.Get("TabsTitle")
@@ -146,6 +169,10 @@ Public NotInheritable Class MainPage
         PinRemoveButton.Content = Localizer.Get("PinRemove")
 
         DesktopToggle.IsChecked = _session.DesktopMode
+        PrivateModeToggle.IsChecked = _session.PrivateMode
+        NightModeToggle.IsChecked = _appSettings.NightMode
+        BlockTrackersToggle.IsChecked = _appSettings.BlockTrackers
+        RestoreSessionToggle.IsChecked = _appSettings.RestoreSession
         HomepageBox.Text = _appSettings.Homepage
         DohServerBox.Text = _appSettings.DohUrl
 
@@ -172,8 +199,7 @@ Public NotInheritable Class MainPage
     Private Sub PopulateSearchEnginePicker()
         SearchEnginePicker.Items.Clear()
         SearchEnginePicker.Items.Add("DuckDuckGo")
-        SearchEnginePicker.Items.Add("Bing")
-        SearchEnginePicker.Items.Add("Google")
+        SearchEnginePicker.Items.Add("DuckDuckGo Lite")
         Dim currentTemplate As String = _appSettings.SearchTemplate
         Dim pickedIndex As Integer = 0
         For i As Integer = 0 To _searchTemplates.Length - 1
@@ -253,6 +279,53 @@ Public NotInheritable Class MainPage
         SavePersistedState()
     End Sub
 
+    Private Sub PrivateModeToggle_Checked(sender As Object, e As RoutedEventArgs)
+        _session.PrivateMode = True
+    End Sub
+
+    Private Sub PrivateModeToggle_Unchecked(sender As Object, e As RoutedEventArgs)
+        _session.PrivateMode = False
+    End Sub
+
+    Private Sub NightModeToggle_Checked(sender As Object, e As RoutedEventArgs)
+        _appSettings.NightMode = True
+        SavePersistedState()
+        ApplyNightMode()
+    End Sub
+
+    Private Sub NightModeToggle_Unchecked(sender As Object, e As RoutedEventArgs)
+        _appSettings.NightMode = False
+        SavePersistedState()
+        ApplyNightMode()
+    End Sub
+
+    Private Sub BlockTrackersToggle_Checked(sender As Object, e As RoutedEventArgs)
+        _appSettings.BlockTrackers = True
+        SavePersistedState()
+    End Sub
+
+    Private Sub BlockTrackersToggle_Unchecked(sender As Object, e As RoutedEventArgs)
+        _appSettings.BlockTrackers = False
+        SavePersistedState()
+    End Sub
+
+    Private Sub RestoreSessionToggle_Checked(sender As Object, e As RoutedEventArgs)
+        _appSettings.RestoreSession = True
+        SavePersistedState()
+    End Sub
+
+    Private Sub RestoreSessionToggle_Unchecked(sender As Object, e As RoutedEventArgs)
+        _appSettings.RestoreSession = False
+        SavePersistedState()
+    End Sub
+
+    Private Async Sub ApplyNightMode()
+        Try
+            Await DirectCast(_engine, TridentEngine).SetNightModeAsync(_appSettings.NightMode)
+        Catch ex As Exception
+        End Try
+    End Sub
+
     Private Sub HomepageBox_LostFocus(sender As Object, e As RoutedEventArgs)
         Dim typedHome As String = HomepageBox.Text.Trim()
         If Not String.IsNullOrEmpty(typedHome) Then
@@ -299,6 +372,11 @@ Public NotInheritable Class MainPage
         Dim destUrl As String = target.Url
         If target.IsSearch Then
             destUrl = _appSettings.SearchUrlFor(rawText)
+        End If
+
+        If IsBlockedTrackerUrl(destUrl) Then
+            ShowBlockedTracker()
+            Return
         End If
 
         _session.ActiveTab.PushHistory(destUrl)
@@ -440,6 +518,112 @@ Public NotInheritable Class MainPage
         ErrorText.Visibility = Visibility.Visible
     End Sub
 
+    ''' <summary>Tracker check for top-level navigations (subresources excluded by the OS).</summary>
+    Private Function IsBlockedTrackerUrl(pageUrl As String) As Boolean
+        If Not _appSettings.BlockTrackers Then
+            Return False
+        End If
+        If String.IsNullOrEmpty(pageUrl) Then
+            Return False
+        End If
+        Dim parsedUri As Uri = Nothing
+        If Not Uri.TryCreate(pageUrl, UriKind.Absolute, parsedUri) Then
+            Return False
+        End If
+        Return TrackerBlocklist.ShouldBlock(parsedUri.Host)
+    End Function
+
+    Private Sub ShowBlockedTracker()
+        ErrorText.Text = Localizer.Get("BlockedTracker")
+        ErrorText.Visibility = Visibility.Visible
+    End Sub
+
+    ''' <summary>Snapshot open tabs for restore; skipped entirely in private mode.</summary>
+    Private Sub SaveSessionTabs()
+        Try
+            Dim openUrls As New List(Of String)()
+            For Each openTab In _session.Tabs
+                If Not String.IsNullOrEmpty(openTab.Url) Then
+                    openUrls.Add(openTab.Url)
+                End If
+            Next
+            _appSettings.SetSessionTabs(openUrls)
+        Catch ex As Exception
+        End Try
+    End Sub
+
+    Private Sub FindButton_Click(sender As Object, e As RoutedEventArgs)
+        If FindBar.Visibility = Visibility.Visible Then
+            FindBar.Visibility = Visibility.Collapsed
+        Else
+            FindBar.Visibility = Visibility.Visible
+            FindBox.Focus(FocusState.Programmatic)
+        End If
+    End Sub
+
+    Private Sub FindBox_KeyDown(sender As Object, e As KeyRoutedEventArgs)
+        If e.Key <> Windows.System.VirtualKey.Enter Then Return
+        DoFindNext()
+    End Sub
+
+    Private Sub FindNextButton_Click(sender As Object, e As RoutedEventArgs)
+        DoFindNext()
+    End Sub
+
+    Private Sub FindCloseButton_Click(sender As Object, e As RoutedEventArgs)
+        FindBar.Visibility = Visibility.Collapsed
+        FindResult.Text = String.Empty
+    End Sub
+
+    Private Async Sub DoFindNext()
+        Try
+            Dim searchTerm As String = FindBox.Text
+            If String.IsNullOrEmpty(searchTerm) Then
+                Return
+            End If
+            Dim foundIt As Boolean = Await DirectCast(_engine, TridentEngine).FindInPageAsync(searchTerm)
+            If foundIt Then
+                FindResult.Text = String.Empty
+            Else
+                FindResult.Text = Localizer.Get("FindNoMatch")
+            End If
+        Catch ex As Exception
+        End Try
+    End Sub
+
+    Private Async Sub ReadingButton_Click(sender As Object, e As RoutedEventArgs)
+        Try
+            Dim entered As Boolean = Await DirectCast(_engine, TridentEngine).EnterReadingModeAsync()
+            If Not entered Then
+                ErrorText.Text = Localizer.Get("ErrorPageFailed")
+                ErrorText.Visibility = Visibility.Visible
+            End If
+        Catch ex As Exception
+        End Try
+    End Sub
+
+    Private Sub ShareButton_Click(sender As Object, e As RoutedEventArgs)
+        Try
+            DataTransferManager.ShowShareUI()
+        Catch ex As Exception
+        End Try
+    End Sub
+
+    Private Sub OnShareRequested(sender As DataTransferManager, e As DataRequestedEventArgs)
+        Try
+            Dim pageUrl As String = _session.ActiveTab.Url
+            Dim sharedUri As Uri = Nothing
+            If Not Uri.TryCreate(If(pageUrl, String.Empty), UriKind.Absolute, sharedUri) Then
+                e.Request.FailWithDisplayText(Localizer.Get("ErrorPageFailed"))
+                Return
+            End If
+            e.Request.Data.Properties.Title = If(String.IsNullOrEmpty(pageUrl), Localizer.Get("AppName"), pageUrl)
+            e.Request.Data.SetUri(sharedUri)
+        Catch ex As Exception
+            e.Request.FailWithDisplayText(Localizer.Get("ErrorPageFailed"))
+        End Try
+    End Sub
+
     Private Sub OnHardwareBackPressed(sender As Object, e As BackPressedEventArgs)
         If _session.ActiveTab.CanGoBack Then
             _session.ActiveTab.Back()
@@ -450,6 +634,11 @@ Public NotInheritable Class MainPage
     End Sub
 
     Private Sub OnNavigationStarting(sender As WebView, e As WebViewNavigationStartingEventArgs)
+        If e.Uri IsNot Nothing AndAlso IsBlockedTrackerUrl(e.Uri.ToString()) Then
+            e.Cancel = True
+            ShowBlockedTracker()
+            Return
+        End If
         _navigationToken = e.Uri
         LoadProgress.Value = 10
         HideError()
@@ -463,13 +652,19 @@ Public NotInheritable Class MainPage
         Dim pageUrl As String = e.Uri.ToString()
         _session.ActiveTab.ReplaceCurrent(pageUrl)
         AddressBox.Text = _session.ActiveTab.Url
-        _historyStore.Add(_session.ActiveTab.Url, _session.ActiveTab.Url)
+        If Not _session.PrivateMode Then
+            _historyStore.Add(_session.ActiveTab.Url, String.Empty)
+            SaveSessionTabs()
+        End If
         SavePersistedState()
         RefreshTabsList()
         RefreshHistoryList()
         UpdateSecurityGlyph()
         Try
             Await DirectCast(_engine, TridentEngine).InjectPolyfillAsync()
+            If _appSettings.NightMode Then
+                Await DirectCast(_engine, TridentEngine).SetNightModeAsync(True)
+            End If
         Catch ex As Exception
         End Try
     End Sub
@@ -503,6 +698,16 @@ Public NotInheritable Class MainPage
         RefreshTabsList()
         RefreshHistoryList()
         RefreshFavoritesList()
+        SettingsOverlay.Visibility = Visibility.Visible
+    End Sub
+
+    Private Sub DiagnosticsButton_Click(sender As Object, e As RoutedEventArgs)
+        SettingsOverlay.Visibility = Visibility.Collapsed
+        DiagnosticsOverlay.Visibility = Visibility.Visible
+    End Sub
+
+    Private Sub DiagnosticsBackButton_Click(sender As Object, e As RoutedEventArgs)
+        DiagnosticsOverlay.Visibility = Visibility.Collapsed
         SettingsOverlay.Visibility = Visibility.Visible
     End Sub
 
