@@ -13,6 +13,7 @@ Imports System.Threading.Tasks
 Imports BrowserForWP.Core.Engine.Native
 Imports BrowserForWP.Net.Dns
 Imports BrowserForWP.Net.Http
+Imports BrowserForWP.Net.Tls13
 
 Namespace Diagnostics
 
@@ -21,6 +22,25 @@ Namespace Diagnostics
         Implements IDocumentFetcher
 
         Private Const MaxRedirects As Integer = 3
+
+        ''' <summary>
+        ''' Optional pin table. A host the user has pinned is refused unless the leaf
+        ''' certificate's SPKI matches, and that happens before any body is decoded.
+        ''' It reuses CertificateValidator.VerifyPin rather than comparing anything
+        ''' here, so this and the TLS probe cannot drift apart.
+        '''
+        ''' Why this matters more here than anywhere else: the handshake already
+        ''' validates chain trust and hostname, but a pin is what defends against a
+        ''' trusted CA that has been compromised, which chain validation cannot. And
+        ''' until this class existed, nothing but the probe used this transport, so
+        ''' README's claim that pinning protects the app's own transport layer was
+        ''' true by accident. It is true by construction now.
+        ''' </summary>
+        Private ReadOnly _pinTable As PinStore
+
+        Public Sub New(Optional pinTable As PinStore = Nothing)
+            _pinTable = pinTable
+        End Sub
 
         Public Async Function FetchAsync(url As String, dohUrl As String) As Task(Of DocumentResponse) Implements IDocumentFetcher.FetchAsync
             Dim parsedUri As Uri = Nothing
@@ -74,6 +94,17 @@ Namespace Diagnostics
                 Dim httpResponse As HttpResponse = Await client.GetAsync(url)
                 result.StatusCode = httpResponse.StatusCode
                 result.FinalUrl = httpResponse.FinalUrl
+
+                If _pinTable IsNot Nothing AndAlso _pinTable.Contains(parsedUri.Host) Then
+                    Dim sessionInfo As TlsSessionInfo = client.SessionInfo
+                    ' A certificate that cannot be read is not a pass. The user stored
+                    ' a pin for this host; it is verified or the fetch fails.
+                    If sessionInfo Is Nothing OrElse
+                       Not CertificateValidator.VerifyPin(sessionInfo.LeafCertificateDer, parsedUri.Host, _pinTable) Then
+                        result.ErrorMessage = "pin mismatch for " & parsedUri.Host
+                        Return result
+                    End If
+                End If
 
                 Dim locationHeader As String = HeaderValue(httpResponse, "Location")
                 If httpResponse.StatusCode >= 300 AndAlso httpResponse.StatusCode < 400 AndAlso Not String.IsNullOrEmpty(locationHeader) Then

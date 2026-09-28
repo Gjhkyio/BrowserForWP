@@ -126,6 +126,23 @@ check('the fetcher uses the TLS 1.3 client', fetcher.includes('HttpClient13'));
 check('the fetcher returns errors instead of throwing', fetcher.includes('ErrorMessage ='));
 check('decoding asks the platform instead of assuming', fetcher.includes('TryGetEncoding'));
 
+// The pin rule. Until now nothing but the TLS probe used this transport, so a
+// stored pin was documented as protecting "the app's TLS 1.3 path" -- and that
+// was accurate. A page LOAD now travels the same path, so the pin has to be
+// enforced here too, or the documentation becomes false the moment it matters.
+// Chain trust cannot substitute: a pin is what defends against a trusted CA.
+function pinDecision(leafDer, host, pins) {
+  const pin = (pins || {})[host] || '';
+  if (!pin) return { blocked: false };
+  return leafDer === pin ? { blocked: false } : { blocked: true, reason: 'pin mismatch' };
+}
+check('an unpinned host is fetched', pinDecision('abc', 'example.com', {}).blocked === false);
+check('a matching pin is fetched', pinDecision('abc', 'example.com', { 'example.com': 'abc' }).blocked === false);
+check('a mismatched pin is refused', pinDecision('abc', 'example.com', { 'example.com': 'zzz' }).blocked === true);
+check('no pin table refuses nothing', pinDecision('abc', 'example.com', null).blocked === false);
+check('the fetch enforces a stored pin', fetcher.includes('VerifyPin'));
+check('the fetch has the leaf certificate to check it against', fetcher.includes('SessionInfo'));
+
 const seamRaw = readIfPresent('BrowserForWP.Core/Engine/Native/IDocumentFetcher.vb');
 const seam = stripVbComments(seamRaw);
 check('IDocumentFetcher.vb exists', seamRaw.length > 0);

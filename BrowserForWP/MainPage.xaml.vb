@@ -903,7 +903,9 @@ Public NotInheritable Class MainPage
                 Return
             End If
 
-            Dim fetcher As New BrowserForWP.Diagnostics.NetDocumentFetcher()
+            ' The pin table goes in: a page load now travels the same TLS 1.3 path the
+            ' probe uses, so a stored pin has to be enforced here too, not only there.
+            Dim fetcher As New BrowserForWP.Diagnostics.NetDocumentFetcher(_pinTable)
             Dim response As DocumentResponse = Await fetcher.FetchAsync(tabUrl, _appSettings.DohUrl)
 
             If Not String.IsNullOrEmpty(response.ErrorMessage) Then

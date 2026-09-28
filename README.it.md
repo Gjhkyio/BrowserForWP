@@ -63,8 +63,9 @@ trasporto e contenuto verranno con te.
   esplicito e reversibile (rimuovere il pin lo annulla). Il pin viene confrontato
   con lo SPKI della foglia quando si connette il trasporto TLS 1.3 dell'app. Il
   traffico della `WebView` passa da Schannel, la cui validazione l'app non può
-  intercettare: un pin protegge quindi il livello di trasporto, non le pagine che
-  visiti.
+  intercettare. Un pin protegge quindi il livello di trasporto dell'app — che
+  comprende le pagine recuperate e analizzate dal motore di documenti nativo —
+  ma non le pagine che *visualizzi* nella `WebView`.
 - **Bundle di compatibilità ES5** (`BrowserForWP.Polyfill/compat.js`) — scritto,
   verificato ES5, incluso e iniettato a `DOMContentLoaded` e al completamento
   tramite `TridentEngine.InjectPolyfillAsync`. Alza il livello minimo; non può

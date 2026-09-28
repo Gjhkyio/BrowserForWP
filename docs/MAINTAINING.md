@@ -587,9 +587,18 @@ probe and the pin store all exist and are wired. What remains is this.
    against the leaf SPKI on every probe and a mismatch is surfaced. They **cannot**
    apply to browsing: the `WebView` rides Schannel, whose validation this app
    cannot hook. A pin therefore protects the app's TLS 1.3 path, never the pages
-   you visit. `README.md` says "certificate pinning for the app's transport
-   layer", which is accurate — do not let it drift into implying that the
-   browser's own traffic is pinned.
+   you *view* in the `WebView`.
+
+   **Corrected while reviewing this phase, because the sentence above had become
+   half-false.** Once `NetDocumentFetcher` existed, a *parsed* page started
+   travelling the app's own TLS 1.3 path — and `FetchAsync` did not check pins, so
+   a pinned host was fetched with its pin silently ignored while this file claimed
+   the path was protected. It now passes `SessionInfo.LeafCertificateDer` through
+   `CertificateValidator.VerifyPin` before decoding the body, and an unreadable
+   certificate fails rather than passing. So: a page **viewed** in the `WebView` is
+   still unpinned (impossible — Schannel); a page **parsed** by the native engine
+   is pinned. `README.md`'s "certificate pinning for the app's transport layer" is
+   accurate, and the qualifier is now load-bearing, not decorative.
 3. **Never run on a handset.** XAML layout, `WebView` behaviour,
    `DOMContentLoaded` injection, reading-mode fallback, lite redirects, night mode
    and 2014-hardware performance are all unverified. Compiling is not running.

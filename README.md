@@ -55,8 +55,10 @@ modern engine, the transport and content layers come with you.
 - **Certificate pinning** — user-managed per-site pins with explicit,
   reversible override (remove the pin to undo it). The pin is checked against
   the leaf's SPKI when the app's own TLS 1.3 transport connects. The `WebView`'s
-  traffic rides Schannel, whose validation this app cannot hook, so a pin
-  protects the transport layer — it does not pin the pages you visit.
+  traffic rides Schannel, whose validation this app cannot hook. So a pin
+  protects the app's transport layer — which includes pages fetched and parsed by
+  the native document engine — but it does not pin the pages you view in the
+  `WebView`.
 - **ES5 compatibility bundle** (`BrowserForWP.Polyfill/compat.js`) — written,
   ES5-checked, packaged, and injected at `DOMContentLoaded` and on completion
   via `TridentEngine.InjectPolyfillAsync`. Raises the floor; cannot parse ES6
