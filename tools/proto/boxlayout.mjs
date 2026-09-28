@@ -134,8 +134,99 @@ check('height accumulates padding and borders', near(padded.heightPx, 66));
 
 // 6. A text run is measured, not guessed.
 const withText = layOutBlock(block('div', style({}), [text('0123456789', style({}))]), 0, 0, viewportPx);
-check('a text run contributes its measured line height',
+check('a text run is measured, not guessed',
   near(withText.heightPx, 19.2) && near(measureWidth('0123456789', style({})), 80));
+
+// ── Inline flow ────────────────────────────────────────────────────────────
+// One TextRun child per word: we break the lines ourselves, so the renderer draws
+// words, not lines. Gaps between words are the space's own measured width.
+
+function splitWords(text) {
+  if (!text) { return []; }
+  return text.split(/\s+/).filter(Boolean);
+}
+
+function buildLines(runs, contentLeftPx, flowTopPx, contentWidthPx, containerStyle) {
+  const lines = [];
+  if (!runs.length || contentWidthPx <= 0) { return lines; }
+
+  const words = [];
+  for (const run of runs) {
+    if (!run.style) { continue; }
+    for (const piece of splitWords(run.text)) {
+      words.push({ text: piece, style: run.style });
+    }
+  }
+  if (!words.length) { return lines; }
+
+  const lineHeightPx = lineHeight(containerStyle || words[0].style);
+  const groups = [];
+  let current = { words: [], widthPx: 0 };
+
+  for (const word of words) {
+    const wordWidthPx = measureWidth(word.text, word.style);
+    const spaceWidthPx = current.words.length > 0 ? measureWidth(' ', word.style) : 0;
+    if (current.words.length > 0 && current.widthPx + spaceWidthPx + wordWidthPx > contentWidthPx) {
+      groups.push(current);
+      current = { words: [word], widthPx: wordWidthPx };
+    } else {
+      current.widthPx += spaceWidthPx + wordWidthPx;
+      current.words.push(word);
+    }
+  }
+  if (current.words.length) { groups.push(current); }
+
+  groups.forEach((group, index) => {
+    const lineTopPx = flowTopPx + index * lineHeightPx;
+    const align = (containerStyle && containerStyle.textAlign) || 'left';
+    let offsetPx = 0;
+    if (align === 'center') { offsetPx = (contentWidthPx - group.widthPx) / 2; }
+    else if (align === 'right') { offsetPx = contentWidthPx - group.widthPx; }
+    if (offsetPx < 0) { offsetPx = 0; }
+
+    let cursorX = contentLeftPx + offsetPx;
+    const children = [];
+    group.words.forEach((word, wordIndex) => {
+      if (wordIndex > 0) { cursorX += measureWidth(' ', word.style); }
+      const wordWidthPx = measureWidth(word.text, word.style);
+      children.push({ xPx: cursorX, yPx: lineTopPx, widthPx: wordWidthPx, heightPx: lineHeightPx, text: word.text });
+      cursorX += wordWidthPx;
+    });
+    lines.push({ xPx: contentLeftPx, yPx: lineTopPx, widthPx: contentWidthPx, heightPx: lineHeightPx, groupWidthPx: group.widthPx, children });
+  });
+  return lines;
+}
+
+// 7. A short run stays on one line.
+const shortRun = buildLines([text('hello world', style({}))], 0, 0, 360, style({}));
+check('a run that fits stays on one line',
+  shortRun.length === 1 && shortRun[0].children.length === 2 && near(shortRun[0].heightPx, 19.2));
+
+// 8. A long run wraps, and the line count is the arithmetic one.
+//    20 words of 5 characters at 16px = 40px each, plus a space of 8px.
+//    Line capacity: floor((360 + 8) / 48) = 7 words.
+const longWords = [];
+for (let i = 0; i < 20; i++) { longWords.push('abcde'); }
+const wrapped = buildLines([text(longWords.join(' '), style({}))], 0, 0, 360, style({}));
+check('a run that does not fit wraps into lines',
+  wrapped.length === 3 && wrapped[2].children.length === 6);
+
+// 9. Breaking happens at a space, never inside a word.
+const singleLongWord = buildLines([text('abcdefghijklmnopqrstuvwxyz', style({}))], 0, 0, 100, style({}));
+check('a word wider than the line is not split',
+  singleLongWord.length === 1 && singleLongWord[0].children.length === 1 &&
+  near(singleLongWord[0].children[0].widthPx, 208));
+
+// 10. text-align centres and right-aligns by offsetting the line's own width.
+const centred = buildLines([text('hello world', style({}))], 0, 0, 360, style({ textAlign: 'center' }));
+check('text-align center offsets the words', near(centred[0].children[0].xPx, (360 - 88) / 2));
+const rightAligned = buildLines([text('hello world', style({}))], 0, 0, 360, style({ textAlign: 'right' }));
+check('text-align right offsets the words', near(rightAligned[0].children[0].xPx, 360 - 88));
+
+// 11. A resolved line-height sets the line box, not the 1.2 default.
+const tallLines = buildLines([text('hello', style({ fontSizePx: 20 }))], 0, 0, 360, style({ fontSizePx: 20, lineHeightPx: 28 }));
+check('a resolved line-height wins over the default',
+  tallLines.length === 1 && near(tallLines[0].heightPx, 28) && near(tallLines[0].children[0].yPx, 0));
 
 // ── Parity with the VB port ────────────────────────────────────────────────
 const layoutBox = readIfPresent('BrowserForWP.Core/Engine/Native/LayoutBox.vb');
@@ -148,6 +239,13 @@ check('BlockLayout exposes Layout(root, viewportWidthPx, measurer)',
 check('the layout files contain no VB 14 fluent chain',
   layoutBox.length > 0 && blockLayout.length > 0 &&
   !/\)\.\s*\n\s*\w+\(/.test(layoutBox) && !/\)\.\s*\n\s*\w+\(/.test(blockLayout));
+
+const inlineLayout = readIfPresent('BrowserForWP.Core/Engine/Native/InlineLayout.vb');
+
+check('InlineLayout.vb exists', inlineLayout.length > 0);
+check('InlineLayout exposes BuildLines',
+  inlineLayout.includes('Function BuildLines(runs As IList(Of BoxNode), contentLeftPx As Double, flowTopPx As Double, contentWidthPx As Double, containerStyle As ComputedStyle, measurer As ITextMeasurer) As IList(Of LayoutBox)'));
+check('InlineLayout contains no VB 14 fluent chain', inlineLayout.length > 0 && !/\).\s*\n\s*\w+\(/.test(inlineLayout));
 
 console.log(`\n${passed}/${passed + failed} checks passed.`);
 if (failed > 0) { process.exit(1); }

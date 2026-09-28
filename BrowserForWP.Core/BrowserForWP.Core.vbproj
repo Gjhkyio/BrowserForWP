@@ -122,6 +122,7 @@
     <Compile Include="Engine\Native\FixedAdvanceTextMeasurer.vb" />
     <Compile Include="Engine\Native\LayoutBox.vb" />
     <Compile Include="Engine\Native\BlockLayout.vb" />
+    <Compile Include="Engine\Native\InlineLayout.vb" />
     <Compile Include="Storage\AppSettings.vb" />
     <Compile Include="Storage\FavoritesStore.vb" />
     <Compile Include="Storage\HistoryStore.vb" />

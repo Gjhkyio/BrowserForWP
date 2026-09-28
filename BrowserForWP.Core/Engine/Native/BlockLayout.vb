@@ -133,41 +133,19 @@ Namespace Engine.Native
         End Function
 
         ''' <summary>
-        ''' Inline flow, first version: one line per run, measured, no wrapping. Task 3
-        ''' replaces the body of this function with a call to InlineLayout.BuildLines,
-        ''' which is why it is one function: the caller does not change.
+        ''' Inline flow: delegate the run group to InlineLayout and add the lines to
+        ''' the parent. Kept as one function so the block path never learns how lines
+        ''' are built.
         ''' </summary>
         Private Shared Function LayOutInlineRun(runs As IList(Of BoxNode), parentBox As LayoutBox,
                                                flowTopPx As Double, contentWidthPx As Double,
                                                measurer As ITextMeasurer) As Double
+            Dim lines As IList(Of LayoutBox) = InlineLayout.BuildLines(runs, parentBox.ContentLeftPx,
+                                                                       flowTopPx, contentWidthPx,
+                                                                       parentBox.Style, measurer)
             Dim usedPx As Double = 0
-            For Each runNode In runs
-                If runNode Is Nothing OrElse runNode.Style Is Nothing Then Continue For
-                Dim runStyle As ComputedStyle = runNode.Style
-                Dim runWidthPx As Double = measurer.MeasureWidth(runNode.Text, runStyle)
-                If runWidthPx > contentWidthPx Then runWidthPx = contentWidthPx
-
-                Dim lineBox As New LayoutBox()
-                lineBox.Kind = LayoutBoxKind.Line
-                lineBox.Style = runStyle
-                lineBox.XPx = parentBox.ContentLeftPx
-                lineBox.YPx = flowTopPx + usedPx
-                lineBox.WidthPx = runWidthPx
-                lineBox.HeightPx = measurer.LineHeight(runStyle)
+            For Each lineBox In lines
                 lineBox.Parent = parentBox
-
-                Dim runBox As New LayoutBox()
-                runBox.Kind = LayoutBoxKind.TextRun
-                runBox.TagName = runNode.TagName
-                runBox.Text = runNode.Text
-                runBox.Style = runStyle
-                runBox.XPx = lineBox.XPx
-                runBox.YPx = lineBox.YPx
-                runBox.WidthPx = lineBox.WidthPx
-                runBox.HeightPx = lineBox.HeightPx
-                runBox.Parent = lineBox
-                lineBox.Children.Add(runBox)
-
                 parentBox.Children.Add(lineBox)
                 usedPx += lineBox.HeightPx
             Next
