@@ -66,9 +66,9 @@ const sln = read('BrowserForWP.sln');
 check('tests registered in sln',
   sln.includes('BrowserForWP.Core.Tests') && sln.includes('BrowserForWP.Crypto.Tests'));
 check('no Release build for Core.Tests',
-  !sln.includes('{C0DE0004-0004-4A2B-9C3D-1B2C3D4E5F04}.Release'));
+  !/\{C0DE0004-0004-4A2B-9C3D-1B2C3D4E5F04\}\.Release[^\n]*Build\.0/.test(sln));
 check('no Release build for Crypto.Tests',
-  !sln.includes('{C0DE0005-0005-4A2B-9C3D-1B2C3D4E5F05}.Release'));
+  !/\{C0DE0005-0005-4A2B-9C3D-1B2C3D4E5F05\}\.Release[^\n]*Build\.0/.test(sln));
 
 if (failures > 0) { console.log(`\n${failures} lightweight failure(s).`); process.exit(1); }
 console.log('\nlightweight checks, 0 failure(s)');
