@@ -44,18 +44,16 @@ Namespace Diagnostics
                     Dim pinOk As Boolean = True
                     Dim pinNote As String = String.Empty
                     If pinTable IsNot Nothing AndAlso pinTable.Contains(cleanHost) Then
-                        Dim presentedPin As String = CertificateValidator.ComputeSpkiPinBase64(session.LeafCertificateDer)
-                        pinOk = pinTable.Verify(cleanHost, presentedPin)
-                        If pinOk Then
-                            pinNote = " pin-match"
-                        Else
-                            pinNote = " pin-MISMATCH"
-                        End If
+                        ' The pin comparison lives in CertificateValidator; the
+                        ' runner deliberately does not carry a second copy that
+                        ' could drift from it.
+                        pinOk = CertificateValidator.VerifyPin(session.LeafCertificateDer, cleanHost, pinTable)
+                        pinNote = If(pinOk, " pin-match", " pin-MISMATCH")
                     End If
                     Dim suiteHex As String = "0x" & session.CipherSuite.ToString("X4")
                     Dim certOk As Boolean = session.CertificateValid AndAlso pinOk
                     Dim detailText As String = "HTTP " & response.StatusCode & " chain=" & session.CertificateChainStatus & pinNote
-                    Return New TlsProbeResult(cleanHost, "TLS1.3", suiteHex, If(session.Alpn, String.Empty), certOk, detailText)
+                    Return New TlsProbeResult(cleanHost, "TLS1.3", suiteHex, If(session.Alpn, String.Empty), certOk, detailText, (Not pinOk))
                 End Using
             Catch ex As Exception
                 Return New TlsProbeResult(cleanHost, String.Empty, String.Empty, String.Empty, False, ex.Message)

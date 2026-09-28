@@ -16,6 +16,7 @@ Imports Windows.UI.Xaml
 Imports Windows.UI.Xaml.Controls
 Imports Windows.UI.Xaml.Input
 Imports Windows.UI.Xaml.Navigation
+Imports Windows.Web
 
 Public NotInheritable Class MainPage
     Inherits Page
@@ -45,7 +46,9 @@ Public NotInheritable Class MainPage
         AddHandler tridentView.View.NavigationStarting, AddressOf OnNavigationStarting
         AddHandler tridentView.View.DOMContentLoaded, AddressOf OnDOMContentLoaded
         AddHandler tridentView.View.NavigationCompleted, AddressOf OnNavigationCompleted
-        AddHandler tridentView.View.NavigationFailed, AddressOf OnNavigationFailed
+        ' No NavigationFailed handler: that event is deprecated on Windows Phone
+        ' 8.1 and carries no URI. Completion reports the same failure through
+        ' IsSuccess / WebErrorStatus, so failures are handled there instead.
 
         _searchTemplates = New String() {
             "https://duckduckgo.com/?q={q}",
@@ -145,9 +148,11 @@ Public NotInheritable Class MainPage
         SecurityDetailsButton.Content = Localizer.Get("SecurityDetails")
         SettingsButton.Content = Localizer.Get("Settings")
 
-        SettingsTitle.Text = Localizer.Get("DiagnosticsTitle")
+        ' The Settings overlay is titled "Settings". It used to read "Diagnostics",
+        ' because these two heading keys were swapped with the ones below.
+        SettingsTitle.Text = Localizer.Get("Settings")
         LanguageLabel.Text = Localizer.Get("LanguageLabel")
-        DiagnosticsTitle.Text = Localizer.Get("DiagnosticsEngineLabel")
+        DiagnosticsTitle.Text = Localizer.Get("DiagnosticsTitle")
         CompatProbeButton.Content = Localizer.Get("DiagnosticsCompatProbe")
         CloseSettingsButton.Content = Localizer.Get("DiagnosticsClose")
         DiagnosticsButton.Content = Localizer.Get("Diagnostics")
@@ -184,9 +189,15 @@ Public NotInheritable Class MainPage
         DohServerBox.Text = _appSettings.DohUrl
 
         Dim capabilities = _engine.Capabilities
-        EngineText.Text = capabilities.ToString() & vbCrLf &
-                          Localizer.Get("DiagnosticsProbe") & ": " &
-                          If(capabilities.NeedsPolyfillLayer, "compatibility layer active", "native")
+        ' The layer state used to be hardcoded English ("compatibility layer
+        ' active") and was prefixed with DiagnosticsProbe, which is the TLS probe
+        ' button's own label ("Run TLS probe"). Both now come from the catalogue.
+        Dim layerState As String = If(capabilities.NeedsPolyfillLayer,
+                                      Localizer.Get("CompatLayerActive"),
+                                      Localizer.Get("CompatLayerNative"))
+        EngineText.Text = Localizer.Get("DiagnosticsEngineLabel") & ":" & vbCrLf &
+                          capabilities.ToString() & vbCrLf &
+                          Localizer.Get("CompatLayerLabel") & ": " & layerState
     End Sub
 
     Private Sub PopulateLanguagePicker()
@@ -440,6 +451,7 @@ Public NotInheritable Class MainPage
     Private Sub StopButton_Click(sender As Object, e As RoutedEventArgs)
         _navigationToken = Nothing
         LoadProgress.Value = 0
+        StatusText.Text = String.Empty
         _engine.Stop()
     End Sub
 
@@ -534,7 +546,7 @@ Public NotInheritable Class MainPage
         Dim caps = _engine.Capabilities
         Dim detailText As String
         If isHttps Then
-            detailText = Localizer.Get("SecuritySecure") & " (TLS 1.2 max, WebView). UA=" & _session.EffectiveUserAgent
+            detailText = Localizer.Get("SecuritySecure") & " " & Localizer.Get("SecurityWebViewCeiling") & " UA=" & _session.EffectiveUserAgent
         Else
             detailText = Localizer.Get("SecurityInsecure")
         End If
@@ -642,7 +654,9 @@ Public NotInheritable Class MainPage
                 Return
             End If
             e.Request.Data.Properties.Title = If(String.IsNullOrEmpty(pageUrl), Localizer.Get("AppName"), pageUrl)
-            e.Request.Data.SetUri(sharedUri)
+            ' SetWebLink, not SetUri: the OS deprecates DataPackage.SetUri with this
+            ' exact advice, and a shared page URL is a web link by definition.
+            e.Request.Data.SetWebLink(sharedUri)
         Catch ex As Exception
             e.Request.FailWithDisplayText(Localizer.Get("ErrorPageFailed"))
         End Try
@@ -675,6 +689,7 @@ Public NotInheritable Class MainPage
         End If
         _navigationToken = e.Uri
         LoadProgress.Value = 10
+        StatusText.Text = Localizer.Get("Loading")
         HideError()
     End Sub
 
@@ -692,7 +707,26 @@ Public NotInheritable Class MainPage
         If _navigationToken Is Nothing Then Return
         _navigationToken = Nothing
 
+        If Not e.IsSuccess Then
+            ' A failed navigation must not be recorded as a visit or reported as
+            ' 100% loaded. The OS status name is shown verbatim (it is a stable
+            ' enum name, not a translated sentence) next to a localized reason.
+            LoadProgress.Value = 0
+            Dim failureReason As String
+            Select Case e.WebErrorStatus
+                Case WebErrorStatus.HostNameNotResolved, WebErrorStatus.CannotConnect, WebErrorStatus.ServerUnreachable, WebErrorStatus.Timeout, WebErrorStatus.ConnectionAborted
+                    failureReason = Localizer.Get("ErrorNoConnection")
+                Case Else
+                    failureReason = Localizer.Get("ErrorNavigationFailed")
+            End Select
+            ErrorText.Text = failureReason & " (" & e.WebErrorStatus.ToString() & ")"
+            ErrorText.Visibility = Visibility.Visible
+            StatusText.Text = String.Empty
+            Return
+        End If
+
         LoadProgress.Value = 100
+        StatusText.Text = Localizer.Get("LoadComplete")
         Dim pageUrl As String = e.Uri.ToString()
         _session.ActiveTab.ReplaceCurrent(pageUrl)
         AddressBox.Text = _session.ActiveTab.Url
@@ -723,13 +757,6 @@ Public NotInheritable Class MainPage
             End If
         Catch ex As Exception
         End Try
-    End Sub
-
-    Private Sub OnNavigationFailed(sender As Object, e As WebViewNavigationFailedEventArgs)
-        _navigationToken = Nothing
-        LoadProgress.Value = 0
-        ErrorText.Text = Localizer.Get("ErrorNavigationFailed") & " " & Localizer.Get("ErrorNoConnection")
-        ErrorText.Visibility = Visibility.Visible
     End Sub
 
     Private Sub HideError()
@@ -808,7 +835,19 @@ Public NotInheritable Class MainPage
                 probeHost = "example.com"
             End If
             Dim runnerResult = Await BrowserForWP.Diagnostics.TlsProbeRunner.RunAsync(probeHost, _appSettings.DohUrl, _pinTable)
-            TlsProbeResult.Text = runnerResult.ToString()
+            ' SecurityTls13 exists for exactly this state, and only for this state:
+            ' the app's own transport negotiated TLS 1.3. It must never be shown
+            ' for WebView traffic, which rides Schannel and tops out at TLS 1.2.
+            If runnerResult.IsTls13 Then
+                TlsProbeResult.Text = Localizer.Get("SecurityTls13") & vbCrLf & runnerResult.ToString()
+            Else
+                TlsProbeResult.Text = runnerResult.ToString()
+            End If
+            ' Surface the localized mismatch sentence instead of leaving the user
+            ' to spot the English "pin-MISMATCH" token inside the detail line.
+            If runnerResult.PinMismatch Then
+                PinStatus.Text = Localizer.Get("PinMismatch")
+            End If
         Catch ex As Exception
             TlsProbeResult.Text = Localizer.Get("ErrorTlsHandshake") & " " & ex.Message
         Finally

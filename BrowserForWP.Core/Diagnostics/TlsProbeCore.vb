@@ -8,13 +8,14 @@ Namespace Diagnostics
     ''' <summary>Outcome of a TLS probe against one host.</summary>
     Public NotInheritable Class TlsProbeResult
 
-        Public Sub New(hostName As String, negotiatedVersion As String, cipherSuite As String, alpn As String, certificateValid As Boolean, detail As String)
+        Public Sub New(hostName As String, negotiatedVersion As String, cipherSuite As String, alpn As String, certificateValid As Boolean, detail As String, Optional pinMismatch As Boolean = False)
             Me.HostName = If(hostName, String.Empty)
             Me.NegotiatedVersion = If(negotiatedVersion, String.Empty)
             Me.CipherSuite = If(cipherSuite, String.Empty)
             Me.Alpn = If(alpn, String.Empty)
             Me.CertificateValid = certificateValid
             Me.Detail = If(detail, String.Empty)
+            Me.PinMismatch = pinMismatch
         End Sub
 
         Public ReadOnly HostName As String
@@ -23,6 +24,14 @@ Namespace Diagnostics
         Public ReadOnly Alpn As String
         Public ReadOnly CertificateValid As Boolean
         Public ReadOnly Detail As String
+
+        ''' <summary>
+        ''' True when a stored pin for this host did NOT match the presented leaf.
+        ''' Distinct from CertificateValid so the UI can show the localized
+        ''' "pin mismatch" message (the "PinMismatch" resource) rather than relying
+        ''' on the English token embedded in Detail.
+        ''' </summary>
+        Public ReadOnly PinMismatch As Boolean
 
         Public ReadOnly Property IsTls13 As Boolean
             Get

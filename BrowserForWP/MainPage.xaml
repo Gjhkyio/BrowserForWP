@@ -72,6 +72,13 @@
             <TextBlock Grid.Row="3" x:Name="ErrorText" TextWrapping="Wrap"
                        Margin="8,2" Opacity="0.9" Visibility="Collapsed"/>
 
+            <!-- Shares row 3 with ErrorText, right-aligned: the Loading/Done status
+                 goes here so the two localized strings in the catalogue have a
+                 real consumer. -->
+            <TextBlock Grid.Row="3" x:Name="StatusText" TextWrapping="NoWrap"
+                       Margin="8,2" Opacity="0.6" HorizontalAlignment="Right"
+                       VerticalAlignment="Top"/>
+
             <ScrollViewer Grid.Row="4" Margin="8"
                           HorizontalScrollBarVisibility="Auto"
                           VerticalScrollBarVisibility="Disabled">
