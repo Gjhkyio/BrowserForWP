@@ -217,6 +217,7 @@ verified if you skipped its command.
 | `BrowserForWP.Polyfill/compat.js` | `node tools/check-polyfill.mjs` | `is valid ES5` |
 | Any `.vb`, `.vbproj`, `.xaml` or `.resw` | `node tools/check-vb.mjs` | `0 finding(s)`, exit code 0 |
 | A manifest capability, or any use of JIT / process creation / full trust | `node tools/check-vb.mjs` | `0 finding(s)`; group 15 refuses `Reflection.Emit`, `CreateProcess`, `Process.Start`, `LoadLibrary`, `VirtualAlloc`/`VirtualProtect` and the capabilities `runFullTrust`, `codeGeneration`, `allowElevation`, `packageManagement` |
+| Any API that a capability gates (location, camera, microphone, contacts, calendar, libraries, network) | `node tools/check-vb.mjs` | `0 finding(s)`; group 16 fails when the code uses such an API and no manifest declares the capability. It is one-directional on purpose — a browser may hold capabilities no line of its code references, because hosted pages are what ask |
 | A `{ThemeResource}` key in XAML | `node tools/check-vb.mjs` | `0 finding(s)`; group 9 checks every key against `tools/wp81-theme-keys.txt` |
 | Any `.vbproj` `ProjectTypeGuids` | `node tools/check-vb.mjs` | `0 finding(s)`; group 14 requires the Windows Phone 8.1 flavour GUID wherever `TargetPlatformIdentifier` is `WindowsPhoneApp` |
 | The theme-key oracle itself | `bash tools/wp81-theme-keys.sh` | `wrote .../tools/wp81-theme-keys.txt (523 keys)` |
@@ -290,7 +291,7 @@ tools/proto/*.mjs             ← runnable prototypes and logic mirrors
 tools/make_logo.py            ← regenerates every image asset
 tools/proto/textmeasure.mjs   ← the measurer's arithmetic (referee)
 tools/proto/boxlayout.mjs     ← block/inline layout numbers (referee)
-tools/check-vb.mjs            ← 15 categories / 72 check groups of static
+tools/check-vb.mjs            ← 16 categories / 73 check groups of static
                                  VB/XAML/project/resw/theme-key/flavour checks
 tools/check-polyfill.mjs      ← ES5 validity of the shim
 tools/wp81-theme-keys.sh      ← regenerates the phone's 523 theme-resource keys

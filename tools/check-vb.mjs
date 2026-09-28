@@ -36,14 +36,18 @@
 //   13. Comment hazards        '--' in XML comments, unescaped '<' in doc comments
 //   14. Project flavour        the flavour GUID the IDE uses to resolve references
 //   15. Privileged access      JIT, process creation, full-trust capabilities
+//   16. Capability requirements  the code needs a capability the manifest lacks
 //
 //  Group 12's list is not a guess about what the profile removes: every entry in
 //  it was paid for by a guest build that failed. FontStyles is the latest.
 //
-//  Group 15 is the opposite and says so: none of its entries has ever broken a
-//  build in this repository, because none of them has ever been written. They are
-//  derived from docs/ARCHITECTURE.md Law 4, so their provenance is reasoning
-//  rather than a compiler, and a reader should weigh them accordingly.
+//  Groups 15 and 16 are the opposite and say so: none of their entries has ever
+//  broken a build in this repository, because none of them has ever been written.
+//  Group 15 is derived from docs/ARCHITECTURE.md Law 4 and group 16 from the
+//  platform's capability list, so their provenance is reasoning rather than a
+//  compiler, and a reader should weigh them accordingly. Of group 16's twelve
+//  requirements exactly one is referenced by this codebase (the network one); the
+//  other eleven are the guard, not a description of what the app does.
 //
 //  WHAT IT CANNOT DO
 //  -----------------
@@ -1077,6 +1081,129 @@ function checkPrivilegedAccess() {
   if (!anyBad) ok('no JIT, no process creation, no privileged capability anywhere');
 }
 
+// ── 16. Capability requirements: what the code needs the manifest to declare ─
+// The other direction from group 15. That one refuses privilege the code must
+// never ask for; this one refuses a RUNTIME failure — an API whose capability is
+// missing throws UnauthorizedAccessException on the device, months after the
+// build was green. The manifest is the only place a capability can live, so this
+// checks the two files against each other.
+//
+// It is deliberately ONE-DIRECTIONAL, and the reason is specific to this product.
+// The reverse rule ("every declared capability must be used") is wrong here: a
+// browser declares capabilities that no line of its own code references, because
+// it is hosted page content that asks — a page calling navigator.geolocation
+// needs THIS app to have declared `location`. A checker enforcing the reverse
+// rule would delete working permissions from a browser. So unused capabilities
+// are reported in the passing line, never as findings.
+//
+// The requirement table is the platform's capability list, not a guess: each
+// entry names the API family that requires it. Exactly one of them fires on this
+// codebase today.
+const CAPABILITY_REQUIREMENTS = [
+  { capability: 'internetClient',
+    api: /\b(StreamSocket|WebView|NetworkInformation|HttpClient|DatagramSocket)\b/,
+    note: 'Outbound network access. `internetClientServer` is a superset and '
+      + 'satisfies this, which is what this package declares.' },
+  { capability: 'location',
+    api: /\b(Geolocator|Geoposition|Geocoordinate|Geofence|GeofenceMonitor|CivicAddressResolver)\b/,
+    note: 'Geolocation, including the location a hosted page asks for through the '
+      + 'WebView.' },
+  { capability: 'webcam',
+    api: /\b(MediaCapture|MediaCaptureInitializationSettings|CameraCaptureUI|CameraStream)\b/,
+    note: 'Video capture. `MediaCapture` spans camera and microphone, so it is '
+      + 'listed under both capabilities: which one is needed depends on the '
+      + 'initialisation profile.' },
+  { capability: 'microphone',
+    api: /\b(MediaCapture|MediaCaptureInitializationSettings|SpeechRecognizer|AudioCapture|AudioGraph)\b/,
+    note: 'Audio capture and speech.' },
+  { capability: 'proximity',
+    api: /\b(ProximityDevice|PeerFinder|PeerInformation|ProximityMessage)\b/,
+    note: 'NFC and near-field peer discovery.' },
+  { capability: 'contacts',
+    api: /\b(ContactManager|ContactStore|ContactPicker|ContactList|KnownContactField)\b/,
+    note: 'Reading or picking contacts.' },
+  { capability: 'appointments',
+    api: /\b(AppointmentStore|AppointmentManager|AppointmentCalendar|AppointmentPicker)\b/,
+    note: 'Reading or writing the calendar.' },
+  { capability: 'phoneCall',
+    api: /\b(PhoneCallManager|PhoneCallStore|PhoneLine)\b/,
+    note: 'Placing calls or reading the call state.' },
+  { capability: 'userAccountInformation',
+    api: /\bUserInformation\b/,
+    note: 'Reading the user name and picture. Also needs a company account at '
+      + 'submission time, so it cannot be added quietly.' },
+  { capability: 'musicLibrary',
+    api: /\bMusicLibrary\b/,
+    note: 'The music library. KnownFolders members are checked by name because '
+      + 'KnownFolders alone names no particular library.' },
+  { capability: 'photosLibrary',
+    api: /\bPicturesLibrary\b/,
+    note: 'The pictures library.' },
+  { capability: 'videosLibrary',
+    api: /\bVideosLibrary\b/,
+    note: 'The videos library.' },
+];
+
+// Declaring a superset satisfies a subset. Only the one relation this product
+// relies on is encoded, plus the one the platform documents; anything more
+// speculative is left out rather than guessed.
+const CAPABILITY_IMPLIES = {
+  internetClientServer: ['internetClient'],
+  enterpriseAuthentication: ['internetClient'],
+};
+
+function checkCapabilityRequirements() {
+  heading('Capability requirements (code vs Package.appxmanifest)');
+  checksRun++;
+
+  const declared = new Set();
+  for (const manifest of walk(ROOT, (f) => f.endsWith('.appxmanifest'))) {
+    const source = fs.readFileSync(manifest, 'utf8');
+    for (const m of source.matchAll(/<Capability\s+Name="([^"]+)"\s*\/>/g)) {
+      declared.add(m[1]);
+    }
+  }
+  const satisfied = new Set(declared);
+  for (const c of declared) {
+    for (const implied of (CAPABILITY_IMPLIES[c] || [])) satisfied.add(implied);
+  }
+
+  // First site per capability, so a missing capability is one finding rather
+  // than one per call site.
+  const needed = new Map();
+  for (const project of projects) {
+    for (const src of walk(project.dir, (f) => f.endsWith('.vb'))) {
+      cleanLines(fs.readFileSync(src, 'utf8')).forEach((line, idx) => {
+        for (const req of CAPABILITY_REQUIREMENTS) {
+          if (!req.api.test(line)) continue;
+          if (!needed.has(req.capability)) {
+            needed.set(req.capability, { src, line: idx + 1, text: line.trim() });
+          }
+        }
+      });
+    }
+  }
+
+  let anyBad = false;
+  for (const [capability, site] of needed) {
+    if (satisfied.has(capability)) continue;
+    fail('capability', site.src,
+      `${site.text} — this needs the "${capability}" capability and no `
+      + `Package.appxmanifest declares it. ${CAPABILITY_REQUIREMENTS.find(
+        (r) => r.capability === capability).note}`,
+      site.line);
+    anyBad = true;
+  }
+
+  if (!anyBad) {
+    const unused = [...declared].filter((c) => !needed.has(c)
+      && !(CAPABILITY_IMPLIES[c] || []).some((i) => needed.has(i)));
+    ok(`every capability the code needs is declared (${[...satisfied].sort().join(', ')}); `
+      + 'declared but not referenced by this code: '
+      + (unused.length ? unused.sort().join(', ') : 'none'));
+  }
+}
+
 // ── Run ────────────────────────────────────────────────────────────────────
 console.log('VB.NET structural checker — BrowserForWP');
 console.log('(This is NOT a compiler. See the header for exactly what it proves.)');
@@ -1101,6 +1228,7 @@ checkVb12Syntax();
 checkProfileHazards();
 checkCommentHazards();
 checkPrivilegedAccess();
+checkCapabilityRequirements();
 
 console.log(`\n${checksRun} check group(s) run, ${findings.length} finding(s).`);
 if (findings.length > 0) {
@@ -1111,7 +1239,7 @@ if (findings.length > 0) {
   }
   process.exit(1);
 }
-console.log('\nNo mechanical defects found in the fifteen checked categories.');
+console.log('\nNo mechanical defects found in the sixteen checked categories.');
 console.log('This still does NOT mean the project compiles. Build it for real:');
 console.log('');
 console.log('  prlctl exec "{66a2f493-162c-4b3f-ba40-0a26020cc818}" "cmd.exe" "/c" \\');
