@@ -1,0 +1,59 @@
+# ─────────────────────────────────────────────────────────────
+# BrowserForWP — ignore rules
+# ─────────────────────────────────────────────────────────────
+
+# Visual Studio / MSBuild build output
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+*.binlog
+*.tlog
+*.log
+
+# Visual Studio user state (never share these)
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.userprefs
+.vs/
+
+# WP / WinRT package output
+AppPackages/
+BundleArtifacts/
+*.appx
+*.appxbundle
+*.appxupload
+*.xap
+*.xapupload
+*.pfx
+*.cer
+
+# NuGet
+packages/
+*.nupkg
+*.snupkg
+
+# Test / coverage
+[Tt]est[Rr]esult*/
+coverage/
+*.coverage
+*.trx
+
+# Node (build tooling only — see tools/)
+node_modules/
+npm-debug.log*
+
+# Python (asset generator only — see tools/)
+__pycache__/
+*.pyc
+.venv/
+
+# macOS
+.DS_Store
+._*
+
+# Generated build artifacts we DO want to keep are committed explicitly;
+# everything below is generated on demand:
+#   tools/gen-vectors.mjs  -> tools/out/*.json  (tracked, see docs)
