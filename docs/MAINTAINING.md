@@ -62,6 +62,15 @@ node tools/proto/tls13.mjs cloudflare.com
 # the only way those assertions execute at all off-device. Keep the two in step.
 node tools/proto/core-logic.mjs
 
+# Text measurement: the seam layout depends on. Must print "10/10 checks passed".
+node tools/proto/textmeasure.mjs
+
+# Block and inline layout. Must print "19/19 checks passed". This is the
+# transliteration source for LayoutBox.vb / BlockLayout.vb / InlineLayout.vb, and
+# it is the only way those numbers are verified off-device: nothing else in this
+# repository predicts where a box lands.
+node tools/proto/boxlayout.mjs
+
 # The shell and delivery guards that arrived with the merged browser shell.
 node tools/proto/shell-guards.mjs    # picker/tab re-entrancy, completed URL, sln registration
 node tools/proto/trackerblock.mjs    # host blocklist matching
@@ -696,6 +705,16 @@ where the code is more confident than the corpus of checks behind it.
 7. **`IeModeProbe` mutates the document it inspects** by appending a `meta` tag.
    That is deliberate, it is the strongest form of the test, and it is reachable
    only from a Diagnostics button — know that before calling it anywhere else.
+8. **Layout has no collapsed-margin model and no auto-margin centring.** Spacing
+   between blocks is therefore slightly wider than a browser's, and a centred
+   `max-width` page (`margin: 0 auto`) will be left-aligned. Both are refinements
+   of `BlockLayout`, and both are visible only once there is layout.
+9. **`text-align` reads the container, not the line's own runs.** A line whose runs
+   disagree about alignment follows the block that holds it. The subset this engine
+   claims has one alignment per block.
+10. **A word wider than its line overflows instead of breaking.** Deliberate: a
+    split URL is a lie about the text. It is also how a long unbroken token becomes
+    a horizontal scrollbar.
 
 ### Error taxonomy
 
@@ -874,6 +893,60 @@ IDE, because the project system is the component that emits it. The evidence for
 the fix is the template comparison above, which is objective and re-runnable, and
 not a before/after screenshot of an error list.
 
+### Round 7 — the native engine lays out and draws a page
+
+Phase 1 stopped at a box tree on purpose; this round added the two things it left
+out, and the boundary between them is one interface:
+
+- **Text measurement** is a XAML operation, so Core declares `ITextMeasurer` and
+  the app answers it — the same split `IBrowserEngine` already uses for the engine
+  itself. `FixedAdvanceTextMeasurer` (0.5 em per character) exists so the numbers
+  layout produces are reproducible in `tools/proto/boxlayout.mjs`.
+- **Layout** is `BlockLayout` (blocks stack, widths fill, `max-width` caps) plus
+  `InlineLayout` (words into lines, breaking at whitespace, `text-align`).
+- **Drawing** is `XamlBoxRenderer`: one `Canvas`, a `TextBlock` per word, a
+  `Rectangle` per background and border, inside a `ScrollViewer`.
+- **Reachable** from Diagnostics → *Render current page natively*, which fetches
+  the current tab over the app's own TLS 1.3 transport. This is the first code
+  path in the product where a page is **rendered** by this repository's own engine
+  rather than by the WebView.
+
+What it does **not** do, stated here so it cannot be mistaken for a regression:
+no JavaScript, no `float`/`position`, no auto-margin centring, no margin
+collapsing, no images, no tables, no flexbox, no grid, and one border outline per
+box instead of four independently styled edges. The declared subset is a reader,
+not a browser.
+
+**The guest build taught group 12 a new hazard.** `FontStyles` (`System.Windows`)
+is WPF and does not exist in the WinRT profile at all: four `BC30451` errors, in
+code that this repository's own plan had written. XAML markup resolves
+`FontStyle="Italic"` through the enum; code has to name
+`Windows.UI.Text.FontStyle.Italic`. The hazard is now in `check-vb.mjs` group 12,
+with its negative control run — 4 findings with `FontStyles` restored, 0 without.
+That is the second time a checker group has been earned by a failed build rather
+than by a theory, and the reason group 12's entries are all paid for.
+
+**The round also earned a rule, at a price.** Task 1's commit (`c079267`) declared
+`BrowserForWP/Rendering/XamlTextMeasurer.vb` in the app project while that file
+still contained `FontStyles` at its lines 50 and 52 — so **it does not build**, and
+it was not the only such commit: the plan scheduled a Node prototype per task and
+the guest build only once, at the very end, so the red trees sat there until Task 4.
+A Node prototype cannot know a platform hazard, and a single build at the end
+cannot say which commit introduced one. From this round on:
+
+> **A task that adds a `.vb` file to a `.vbproj` ends with a rebuild, not merely a
+> prototype run.**
+
+It is in the loop in `.agents/skills/browserforwp/SKILL.md` too, because the plan
+that broke it was written by the process the loop describes.
+
+**Verified:** `node tools/proto/boxlayout.mjs` 19/19, `textmeasure.mjs` 10/10,
+`core-logic.mjs` 55 assertions, `check-vb.mjs` 0 finding(s), six configurations
+`BUILD_EXIT=0` with only the two deliberate `ResourceLoader` warnings.
+**Not verified:** the on-device output. Nothing in this round has been drawn on a
+handset; the geometry is asserted off-device and the rendering is not asserted at
+all. Record the first real render's surprises here when someone runs it.
+
 ## The loop
 
 Every change follows five steps, in order. The canonical version lives in
@@ -904,8 +977,10 @@ What is and is not covered:
 | `tools/gen-vectors.mjs`, `tools/proto/*.mjs` | The executable prototypes. `gen-vectors.mjs` recomputes HKDF, X25519 and AES-GCM and asserts RFC 5869 / 7748 / 8448 and NIST CAVS vectors; `tls13.mjs` completes real handshakes against live servers. | `node`, on any machine. **This is the real crypto verification.** |
 | `tests/BrowserForWP.Crypto.Tests/` (`Vectors.generated.vb` + `VectorsSmokeTests.vb`) | Generated VB constants from those same vectors, plus length/shape checks. | **Compiled by the guest build; never executed.** |
 | `tests/BrowserForWP.Core.Tests/CoreLogicTests.vb` | Address normalisation, tab state, session/UA, settings, history, favourites, pin normalisation, hostname wildcards, language matching. | **Compiled by the guest build; never executed.** |
-| `tools/proto/core-logic.mjs` | A transliteration of `CoreLogicTests.vb`. 53 assertions, exit 1 on failure. | `node`, on any machine. **This is what actually runs those assertions.** |
-| `tools/check-vb.mjs` | 14 categories / 64 check groups over every `.vb`, `.vbproj`, `.xaml` and `.resw`, including every `{ThemeResource}` key and every project's flavour GUID. | `node`, on any machine. |
+| `tools/proto/core-logic.mjs` | A transliteration of `CoreLogicTests.vb`. 55 assertions, exit 1 on failure. | `node`, on any machine. **This is what actually runs those assertions.** |
+| `tools/proto/textmeasure.mjs` | The measurer's arithmetic, plus parity with the VB that implements it. | `node`, on any machine. |
+| `tools/proto/boxlayout.mjs` | Block widths and heights, line breaking, alignment. The referee for `BlockLayout.vb` / `InlineLayout.vb`. | `node`, on any machine. |
+| `tools/check-vb.mjs` | 14 categories / 71 check groups over every `.vb`, `.vbproj`, `.xaml` and `.resw`, including every `{ThemeResource}` key and every project's flavour GUID. | `node`, on any machine. |
 | `tools/wp81-theme-keys.sh` | Regenerates `tools/wp81-theme-keys.txt`, the 523 theme-resource keys Windows Phone 8.1 defines, read from the guest's design dictionaries. | `bash`, with the guest reachable. |
 | `tools/vm-build.cmd` | The real compiler, and the arbiter of pass/fail. | The Windows guest. |
 | `tools/wmc9999-probe.sh` | Build-diagnostic characterisation and XAML output invariance. | `bash`, on the host. |

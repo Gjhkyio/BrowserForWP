@@ -561,6 +561,14 @@ check('lang primary subtag', catalogMatch(['it']) === 'it-IT');
 check('lang order authoritative', catalogMatch(['en-US', 'it-IT']) === 'en-US');
 check('en-US never removed', SupportedTags[0] === 'en-US');
 
+// ── The measurement seam (mirror of CoreLogicTests.vb's measurer checks) ──
+// Same two numbers as the VB. This file is what executes them; the VB project
+// compiles and is never run off-device.
+const ADVANCE_FACTOR = 0.5;
+const NORMAL_LINE_HEIGHT = 1.2;
+check('measurer advance', 4 * 16 * ADVANCE_FACTOR === 32);
+check('measurer normal line height', 16 * NORMAL_LINE_HEIGHT === 19.2);
+
 // ── Summary ───────────────────────────────────────────────────────────────
 if (failures > 0) {
   console.log(`\n${failures} core-logic failure(s) out of ${checks}.`);

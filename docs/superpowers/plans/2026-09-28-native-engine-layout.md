@@ -1846,3 +1846,117 @@ the exact line it goes after (`<Compile Include="Engine\Native\BoxTreeBuilder.vb
 `CoreLogicTests.vb` and both `.vbproj` files moved during this repository's last two
 rounds, and a plan that cites a line number is wrong the moment it is read after the
 first task is applied.
+
+---
+
+## Outcome — what executing this plan actually produced
+
+Executed 2026-09-28, all five tasks, `c079267` → the commit that carries this
+section. Red-first held throughout: every prototype failed before it passed, and
+every failure was a specific wrong number rather than a missing file.
+
+### Per task, the counts
+
+| Task | Referee | RED | GREEN | Commit |
+| --- | --- | --- | --- | --- |
+| 1 — text-measurement seam | `node tools/proto/textmeasure.mjs` | 5/10 | 10/10 | `c079267` |
+| 2 — block layout | `node tools/proto/boxlayout.mjs` | 6/10 | 10/10 | `3464081` |
+| 3 — inline flow | `node tools/proto/boxlayout.mjs` | 16/19 | 19/19 | `0b233f5` |
+| 4 — XAML rendering | none; this task has no referee | — | — | `020cde6` |
+| 5 — record and regress | `node tools/proto/core-logic.mjs` | 53 assertions | 55 assertions, 0 failures | *this commit* |
+
+Task 4 having no referee is not an oversight in the table: the plan scheduled no
+check for the renderer because none is possible here, and the Verification matrix
+below says so in advance. The consequence is real and is restated under "Not
+verified".
+
+### Where the plan was wrong
+
+**1. `FontStyles` — four `BC30451` errors, and this plan wrote every one of them.**
+
+Task 1's `XamlTextMeasurer.vb` (this plan, lines 280 and 282) and Task 4's
+`XamlBoxRenderer.vb` (lines 1405 and 1407) are written with
+`FontStyles.Italic` / `FontStyles.Normal`. That type is `System.Windows` — WPF. The
+WinRT profile has no `FontStyles` helper at all, and the guest build reported
+**four** `error BC30451: 'FontStyles' non dichiarato`, one per site. The fix names
+`Windows.UI.Text.FontStyle.Italic` / `.Normal`, and the hazard is now `check-vb.mjs`
+group 12's newest entry, paid for with a negative control in `/tmp/bfwp-neg`:
+**4 findings with `FontStyles` restored, 0 without**.
+
+What makes this worth recording rather than just fixing: **XAML markup cannot
+produce this error.** `FontStyle="Italic"` inside a `<TextBlock>` resolves through
+the enum and never names the WPF helper, so the surrounding `.xaml` files gave no
+scent of it. Neither did any analogue in the repository. Only the compiler knew.
+
+**2. Task 1's commit does not build, and this plan's own granularity rule says it
+must.**
+
+`c079267` declares `BrowserForWP/Rendering/XamlTextMeasurer.vb` in
+`BrowserForWP.vbproj`, with `FontStyles` at its lines 50 and 52. It first compiles
+in `020cde6`, where that same file was changed as a side effect of fixing Task 4.
+So a task the plan describes as "ends with an independently testable deliverable"
+shipped three commits earlier as a non-building tree.
+
+Nothing caught it, and **nothing could have**: the plan scheduled a Node prototype
+run per task and a guest build only once, at the end. A Node prototype cannot know
+a profile hazard, and a guest build — run once — cannot say which commit introduced
+one. The rule this round earned is therefore stronger than the plan's:
+
+> **A task that adds a `.vb` file to a `.vbproj` ends with a rebuild, not merely a
+> prototype run.**
+
+Recorded in `docs/MAINTAINING.md` Round 7 and in the loop in
+`.agents/skills/browserforwp/SKILL.md`.
+
+**3. Step 4's command, as written, prints nothing.**
+
+The loop ends `| grep -E "BUILD_EXIT|error BC|error MSB|warning BC" | sort -u`. On
+this host `sort` rejects MSBuild's console output with `Illegal byte sequence` and
+emits nothing, so the command *as planned* would have shown a blank line under each
+of the six configuration headers — with all six builds actually at `BUILD_EXIT=0`.
+A false negative wearing the costume of a failure. The working form writes each raw
+log to a file and filters it afterwards with `LC_ALL=C grep -a`.
+
+**4. The group count was stale the day the plan was written.**
+
+Step 3 expects `64 check group(s) run, 0 finding(s)`. The true number is **71**:
+group 14 (project flavour) landed in `b09de8b` earlier the same session, after this
+plan was written and before it was executed. Everything else in Step 3's expected
+output was exact, including `53 assertions` → `55`.
+
+### What was verified, and what was not
+
+Verified for real, on the guest, this round:
+
+- **Six configurations, `BUILD_EXIT=0` each** — `Debug|ARM`, `Debug|x86`,
+  `Release|ARM`, `Release|x86`, and `Debug`/`Release` of the app project at
+  `AnyCPU` (the platform name cannot cross `prlctl exec` because it contains a
+  space). Only the two deliberate `BC40000` `ResourceLoader` warnings.
+- **The test project compiled**, which is the point of running it after Task 5:
+  `BrowserForWP.sln` line 15 registers `BrowserForWP.Core.Tests`, and
+  `vm-build.cmd` line 44 builds the solution, so the new
+  `Imports BrowserForWP.Core.Engine.Native` and both measurer checks were compiled
+  rather than assumed.
+- `core-logic.mjs` 55 assertions / 0 failures; `textmeasure.mjs` 10/10;
+  `boxlayout.mjs` 19/19; `gen-vectors.mjs` 53 assertions; `check-vb.mjs` 71 groups
+  / 0 findings; `check-polyfill.mjs` ES5; `make_logo.py` regenerates all 12 PNGs
+  with no `git status` change.
+
+**Not verified: everything the user would actually see.** No check in this
+repository predicts what `XamlBoxRenderer` draws, and nothing in this round has been
+run on a handset. Page geometry is asserted by executed prototypes; the rendering is
+asserted by nothing at all. This is the clearest case of "compiled is not tested" in
+the project so far, and the first on-device render should be treated as the start of
+the renderer's verification rather than as a formality. Still open from Phase 1 and
+untouched here: `NetDocumentFetcher`'s redirect loop and latin1 branch against live
+servers, `line-height` inherited as an already-resolved px value, and `http://` URLs
+that speak TLS to port 80.
+
+### The lesson about checkers
+
+Group 12's entries are now all paid for by a build that failed. A static checker
+cannot discover a platform hazard it does not already know, so only a build can
+teach it one; the two are not redundant and neither can be skipped. Section "Where
+the plan was wrong" item 2 is the converse and the more expensive half: a build
+that runs once at the end of five tasks can be green while three of those commits
+were red.

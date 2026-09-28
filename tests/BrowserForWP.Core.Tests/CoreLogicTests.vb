@@ -6,6 +6,7 @@
 ' off-device (tools/proto/useragents.mjs, pinstore.mjs).
 
 Imports BrowserForWP.Core.Browser
+Imports BrowserForWP.Core.Engine.Native
 Imports BrowserForWP.Core.Storage
 Imports BrowserForWP.Localization
 Imports BrowserForWP.Net.Tls13
@@ -56,6 +57,17 @@ Namespace CoreTests
             ran += 1
 
             Check(UserAgents.EffectiveUserAgent(False) = UserAgents.MobileDefault, "UA helper mobile")
+            ran += 1
+
+            ' The measurer's arithmetic is what makes layout numbers reproducible, so
+            ' it is asserted here (compiled on the guest) AND in
+            ' tools/proto/textmeasure.mjs (executed on any machine). Keep the two in
+            ' step: a drift between them makes Node right and the device wrong.
+            Dim measureStyle As New ComputedStyle()
+            measureStyle.FontSizePx = 16
+            Dim fixedMeasurer As New FixedAdvanceTextMeasurer()
+            Check(fixedMeasurer.MeasureWidth("abcd", measureStyle) = 32, "measurer advance")
+            Check(fixedMeasurer.LineHeight(measureStyle) = 19.2, "measurer normal line height")
             ran += 1
 
             Dim appSettings As New AppSettings()

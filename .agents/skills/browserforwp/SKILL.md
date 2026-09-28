@@ -198,6 +198,8 @@ verified if you skipped its command.
 | Lite defaults / caps / resources | `node tools/proto/lightweight.mjs` | `0 failure(s)` |
 | Shim delivery / redirect rules | `node tools/proto/modern-sites.mjs` | `0 failure(s)` |
 | Picker/tab re-entrancy, sln registration | `node tools/proto/shell-guards.mjs` | `0 failure(s)` |
+| Text measurement (`ITextMeasurer`, either implementation) | `node tools/proto/textmeasure.mjs` | `10/10 checks passed` |
+| `BlockLayout.vb` / `InlineLayout.vb` / `LayoutBox.vb`, or anything that positions a box | `node tools/proto/boxlayout.mjs` | `19/19 checks passed` |
 | `CompatibilityProbe.vb` / any probe verdict | `node tools/proto/probe-verdict.mjs` | `9/9 checks passed` |
 | Any claim about re-configuring Trident | `node tools/proto/ie-adapt.mjs` | `9/9 checks passed` |
 | `BrowserForWP.Polyfill/compat.js` | `node tools/check-polyfill.mjs` | `is valid ES5` |
@@ -272,7 +274,9 @@ tools/proto/*.mjs             ← runnable prototypes and logic mirrors
                                  shell-guards, ie-adapt, probe-verdict,
                                  fetch-rules, htmlparse, csscascade, boxtree)
 tools/make_logo.py            ← regenerates every image asset
-tools/check-vb.mjs            ← 14 categories / 64 check groups of static
+tools/proto/textmeasure.mjs   ← the measurer's arithmetic (referee)
+tools/proto/boxlayout.mjs     ← block/inline layout numbers (referee)
+tools/check-vb.mjs            ← 14 categories / 71 check groups of static
                                  VB/XAML/project/resw/theme-key/flavour checks
 tools/check-polyfill.mjs      ← ES5 validity of the shim
 tools/wp81-theme-keys.sh      ← regenerates the phone's 523 theme-resource keys
@@ -455,7 +459,11 @@ Same loop, but the diagnosis comes first.
    changed in `tools/proto/` first, verified there, then transliterated.
 3. **Verify.** Run the commands in the table above for every layer touched.
    Report which commands were run and their real output. Never claim a layer is
-   verified because a different layer passed.
+   verified because a different layer passed **and never let a guest build wait
+   for the end of the task list: a task that adds a `.vb` file to a `.vbproj`
+   ends with a rebuild, because a Node prototype cannot see a profile hazard.
+   Three commits of the layout round were non-building trees for exactly this
+   reason — the prototypes were green and the compiler was not asked.**
 4. **Commit.** Conventional Commits, imperative mood, subject <= 72 characters.
 5. **Push.** `git push origin HEAD`. A commit that is not pushed does not count
    as done. Confirm with `git ls-remote origin refs/heads/main` matching
@@ -522,3 +530,10 @@ every error family in rounds 3 and 4 passed it. Before the guest round trip was
 discovered, every non-trivial decision had to be backed by an executable
 prototype; that method found four real TLS bugs and is still worth keeping for
 protocol work. It is no longer a substitute for compiling.
+
+**And the two are blind to different things, which is why order matters.** A
+green checker knows nothing about the compiler; a compiler run once at the end of
+five tasks knows nothing about *when* a break was introduced. The layout round
+proved both halves: `FontStyles` (WPF) passed every off-device check and failed
+the build four times, and the commit that introduced it was three commits behind
+the build that found it. Build whenever a `.vb` joins a `.vbproj`.
