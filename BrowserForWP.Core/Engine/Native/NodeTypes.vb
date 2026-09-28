@@ -145,4 +145,59 @@ Namespace Engine.Native
 
     End Class
 
+    ''' <summary>
+    ''' Used values for one box. Lengths are already resolved to pixels -- em/rem
+    ''' need the parent font size, which is only available while walking the tree,
+    ''' so resolution happens in the resolver and never in the parser.
+    ''' </summary>
+    Public NotInheritable Class ComputedStyle
+
+        Public Property Display As String = "inline"
+        Public Property Color As String = "#000000"
+        Public Property BackgroundColor As String = "transparent"
+        Public Property FontSizePx As Double = 16
+        Public Property FontFamily As String = "'Segoe UI'"
+        Public Property FontWeight As Integer = 400
+        Public Property FontStyle As String = "normal"
+        Public Property LineHeightPx As Double = -1
+        Public Property TextAlign As String = "left"
+        Public Property TextDecoration As String = "none"
+        Public Property ListStyleType As String = "disc"
+        Public Property MarginTopPx As Double
+        Public Property MarginRightPx As Double
+        Public Property MarginBottomPx As Double
+        Public Property MarginLeftPx As Double
+        Public Property PaddingTopPx As Double
+        Public Property PaddingRightPx As Double
+        Public Property PaddingBottomPx As Double
+        Public Property PaddingLeftPx As Double
+        Public Property BorderTopWidthPx As Double
+        Public Property BorderRightWidthPx As Double
+        Public Property BorderBottomWidthPx As Double
+        Public Property BorderLeftWidthPx As Double
+        Public Property BorderTopStyle As String = "none"
+        Public Property BorderRightStyle As String = "none"
+        Public Property BorderBottomStyle As String = "none"
+        Public Property BorderLeftStyle As String = "none"
+        Public Property BorderTopColor As String = "currentcolor"
+        Public Property BorderRightColor As String = "currentcolor"
+        Public Property BorderBottomColor As String = "currentcolor"
+        Public Property BorderLeftColor As String = "currentcolor"
+        Public Property WidthPx As Double = -1
+        Public Property HeightPx As Double = -1
+        Public Property MaxWidthPx As Double = -1
+
+        Public ReadOnly Property IsBlock As Boolean
+            Get
+                Return Display = "block"
+            End Get
+        End Property
+
+        Public ReadOnly Property IsHidden As Boolean
+            Get
+                Return Display = "none"
+            End Get
+        End Property
+    End Class
+
 End Namespace
