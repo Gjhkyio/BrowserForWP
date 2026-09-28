@@ -6,6 +6,7 @@
 ' a mystery.
 
 Imports System.Threading.Tasks
+Imports Windows.Storage
 Imports Windows.UI.Xaml.Controls
 
 Namespace Engine
@@ -86,6 +87,30 @@ Namespace Engine
 
         Public Function InvokeScriptAsync(script As String) As Task(Of String) Implements IBrowserEngine.InvokeScriptAsync
             Return _view.InvokeScriptAsync("eval", New String() {script}).AsTask()
+        End Function
+
+        ''' <summary>
+        ''' Load the packaged compat.js and eval it in the current document.
+        ''' Returns True when the timing-hook marker reads back; False when there
+        ''' is no document yet or scripting is unavailable. Never throws.
+        ''' </summary>
+        Public Async Function InjectPolyfillAsync() As Task(Of Boolean)
+            Try
+                Dim polyUri As New Uri("ms-appx:///Polyfill/compat.js")
+                Dim polyFile As StorageFile = Await StorageFile.GetFileFromApplicationUriAsync(polyUri)
+                Dim polyText As String = Await FileIO.ReadTextAsync(polyFile)
+                If String.IsNullOrEmpty(polyText) Then
+                    Return False
+                End If
+                Await InvokeScriptAsync(polyText)
+                Dim markerText As String = Await InvokeScriptAsync("window.__browserForWPCompat?1:0")
+                If String.IsNullOrEmpty(markerText) Then
+                    Return False
+                End If
+                Return markerText.Trim() = "1"
+            Catch ex As Exception
+                Return False
+            End Try
         End Function
     End Class
 
