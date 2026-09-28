@@ -22,7 +22,13 @@ Imports Windows.Web
 Public NotInheritable Class MainPage
     Inherits Page
 
-    Private ReadOnly _engine As IBrowserEngine = New TridentEngine()
+    ' The engine is mutable from this round on: Settings can hand the shell a
+    ' different one, and UseEngine is the only thing that ever assigns it. The two
+    ' candidates are built once and kept, because building one is also what attaches
+    ' its events.
+    Private _engine As IBrowserEngine
+    Private _tridentEngine As TridentEngine
+    Private _nativeEngine As BrowserForWP.Engine.NativeEngine
     Private ReadOnly _session As New BrowserSession()
     Private ReadOnly _appSettings As New AppSettings()
     Private ReadOnly _historyStore As New HistoryStore()
@@ -35,6 +41,7 @@ Public NotInheritable Class MainPage
     ''' <summary>True while pickers/lists are repopulated, so programmatic selection is ignored.</summary>
     Private _populatingLanguage As Boolean = False
     Private _refreshingTabs As Boolean = False
+    Private _populatingEngine As Boolean = False
 
     Protected Overrides Sub OnNavigatedTo(e As NavigationEventArgs)
         MyBase.OnNavigatedTo(e)
@@ -42,14 +49,10 @@ Public NotInheritable Class MainPage
         AddHandler HardwareButtons.BackPressed, AddressOf OnHardwareBackPressed
         AddHandler DataTransferManager.GetForCurrentView().DataRequested, AddressOf OnShareRequested
 
-        ContentHost.Child = DirectCast(_engine.Source, UIElement)
-        Dim tridentView As TridentEngine = DirectCast(_engine, TridentEngine)
-        AddHandler tridentView.View.NavigationStarting, AddressOf OnNavigationStarting
-        AddHandler tridentView.View.DOMContentLoaded, AddressOf OnDOMContentLoaded
-        AddHandler tridentView.View.NavigationCompleted, AddressOf OnNavigationCompleted
-        ' No NavigationFailed handler: that event is deprecated on Windows Phone
-        ' 8.1 and carries no URI. Completion reports the same failure through
-        ' IsSuccess / WebErrorStatus, so failures are handled there instead.
+        ' Nothing engine-shaped is wired here any more. Which engine the shell gets
+        ' depends on a persisted setting, so both the host control and the platform
+        ' event handlers are attached by ApplyEngineChoice below, once
+        ' LoadPersistedState has run.
 
         _searchTemplates = New String() {
             "https://duckduckgo.com/?q={q}",
@@ -60,6 +63,8 @@ Public NotInheritable Class MainPage
         ApplyLocalizedStrings()
         PopulateLanguagePicker()
         PopulateSearchEnginePicker()
+        PopulateEnginePicker()
+        ApplyEngineChoice()
         RefreshTabsList()
         RefreshHistoryList()
         RefreshFavoritesList()
@@ -83,10 +88,10 @@ Public NotInheritable Class MainPage
         MyBase.OnNavigatedFrom(e)
         RemoveHandler HardwareButtons.BackPressed, AddressOf OnHardwareBackPressed
         RemoveHandler DataTransferManager.GetForCurrentView().DataRequested, AddressOf OnShareRequested
-        Try
-            RemoveHandler DirectCast(_engine, TridentEngine).View.DOMContentLoaded, AddressOf OnDOMContentLoaded
-        Catch ex As Exception
-        End Try
+        ' Only the WebView has this event, and only if the WebView was ever built.
+        If _tridentEngine IsNot Nothing Then
+            RemoveHandler _tridentEngine.View.DOMContentLoaded, AddressOf OnDOMContentLoaded
+        End If
         SavePersistedState()
     End Sub
 
@@ -166,6 +171,7 @@ Public NotInheritable Class MainPage
         LiteRedirectsToggle.Content = Localizer.Get("LiteRedirects")
         HomepageLabel.Text = Localizer.Get("HomepageLabel")
         SearchEngineLabel.Text = Localizer.Get("SearchEngineLabel")
+        EngineLabel.Text = Localizer.Get("EngineLabel")
         TabsTitle.Text = Localizer.Get("TabsTitle")
         CloseTabButton.Content = Localizer.Get("CloseTab")
         HistoryTitle.Text = Localizer.Get("HistoryTitle")
@@ -180,7 +186,6 @@ Public NotInheritable Class MainPage
         PinAddButton.Content = Localizer.Get("PinAdd")
         PinRemoveButton.Content = Localizer.Get("PinRemove")
         ParsePageButton.Content = Localizer.Get("ParseThisPage")
-        RenderNativeButton.Content = Localizer.Get("RenderNatively")
         IeModeButton.Content = Localizer.Get("IeModeCheck")
 
         DesktopToggle.IsChecked = _session.DesktopMode
@@ -231,6 +236,48 @@ Public NotInheritable Class MainPage
             End If
         Next
         SearchEnginePicker.SelectedIndex = pickedIndex
+    End Sub
+
+    ''' <summary>
+    ''' The three choices, in the order EngineIndexOf and EngineSettingFor agree on.
+    ''' The picker is repopulated under a guard, exactly like the language picker, so
+    ''' that setting SelectedIndex programmatically does not look like a user choice.
+    ''' </summary>
+    Private Sub PopulateEnginePicker()
+        _populatingEngine = True
+        Try
+            EnginePicker.Items.Clear()
+            EnginePicker.Items.Add(Localizer.Get("EngineAuto"))
+            EnginePicker.Items.Add(Localizer.Get("EngineTrident"))
+            EnginePicker.Items.Add(Localizer.Get("EngineNative"))
+            EnginePicker.SelectedIndex = EngineIndexOf(EngineChoice.Normalize(_appSettings.EngineSetting))
+        Finally
+            _populatingEngine = False
+        End Try
+    End Sub
+
+    Private Shared Function EngineIndexOf(normalizedSetting As String) As Integer
+        If normalizedSetting = EngineChoice.Native Then Return 2
+        If normalizedSetting = EngineChoice.Trident Then Return 1
+        Return 0
+    End Function
+
+    Private Shared Function EngineSettingFor(pickedIndex As Integer) As String
+        If pickedIndex = 2 Then Return EngineChoice.Native
+        If pickedIndex = 1 Then Return EngineChoice.Trident
+        Return EngineChoice.Auto
+    End Function
+
+    Private Sub EnginePicker_SelectionChanged(sender As Object, e As SelectionChangedEventArgs)
+        If _populatingEngine Then Return
+        _appSettings.EngineSetting = EngineSettingFor(EnginePicker.SelectedIndex)
+        SavePersistedState()
+        ApplyEngineChoice()
+        Dim tabUrl As String = _session.ActiveTab.Url
+        If String.IsNullOrEmpty(tabUrl) Then
+            tabUrl = _appSettings.Homepage
+        End If
+        _engine.Navigate(tabUrl)
     End Sub
 
     Private Sub RefreshTabsList()
@@ -698,10 +745,12 @@ Public NotInheritable Class MainPage
     End Sub
 
     Private Async Sub OnDOMContentLoaded(sender As WebView, e As WebViewDOMContentLoadedEventArgs)
+        Dim scripted As TridentEngine = ScriptedEngine
+        If scripted Is Nothing Then Return
         Try
-            Await DirectCast(_engine, TridentEngine).InjectPolyfillAsync()
+            Await scripted.InjectPolyfillAsync()
             If _appSettings.NightMode Then
-                Await DirectCast(_engine, TridentEngine).SetNightModeAsync(True)
+                Await scripted.SetNightModeAsync(True)
             End If
         Catch ex As Exception
         End Try
@@ -742,18 +791,42 @@ Public NotInheritable Class MainPage
         RefreshTabsList()
         RefreshHistoryList()
         UpdateSecurityGlyph()
+        Dim scripted As TridentEngine = ScriptedEngine
+        If scripted Is Nothing Then Return
+
         Try
-            Await DirectCast(_engine, TridentEngine).InjectPolyfillAsync()
+            Await scripted.InjectPolyfillAsync()
             If _appSettings.NightMode Then
-                Await DirectCast(_engine, TridentEngine).SetNightModeAsync(True)
+                Await scripted.SetNightModeAsync(True)
             End If
         Catch ex As Exception
         End Try
+
         Try
             Dim compatProbe As New CompatibilityProbe()
             Dim compatReport = Await compatProbe.RunAsync(_engine)
-            If compatReport.MissingFeatures.Count >= 8 Then
-                Dim entered As Boolean = Await DirectCast(_engine, TridentEngine).EnterReadingModeAsync()
+
+            ' A measurement that never ran must not move anything, which is the rule
+            ' EngineChoice encodes and tools/proto/engine-choice.mjs refuses to let
+            ' anyone forget. It also means this block does nothing at all when the
+            ' native engine is already the engine, since it has no scripting and
+            ' therefore returns above.
+            If Not compatReport.CouldRun Then Return
+
+            ' The engine fallback and the reader fallback are alternatives, not a
+            ' sequence: when a measurement says Trident cannot cope, rendering the page
+            ' with this repository's own engine is a better answer than injecting a
+            ' reader, and doing both would fight over the same document. The reader
+            ' stays reachable from the Reading button.
+            If _appSettings.EngineSetting = EngineChoice.Auto AndAlso
+               EngineChoice.Decide(EngineChoice.Auto, True, compatReport.MissingFeatures.Count) = EngineChoice.Native Then
+                UseEngine(EngineChoice.Native)
+                _engine.Navigate(_session.ActiveTab.Url)
+                Return
+            End If
+
+            If compatReport.MissingFeatures.Count >= EngineChoice.AutomaticFallbackThreshold Then
+                Dim entered As Boolean = Await scripted.EnterReadingModeAsync()
                 If entered Then
                     ErrorText.Text = Localizer.Get("ReaderFallback")
                     ErrorText.Visibility = Visibility.Visible
@@ -933,52 +1006,104 @@ Public NotInheritable Class MainPage
     End Sub
 
     ''' <summary>
-    ''' Fetch the current tab's page over the app's own TLS 1.3 transport and draw it
-    ''' with the native engine. This is the first place where a page is RENDERED from
-    ''' the code in BrowserForWP.Core: the parse button above stops at a box tree, and
-    ''' the WebView never involves Core at all.
-    ''' Types are fully qualified because this file's Imports cover the Core engine and
-    ''' this app's own diagnostics, not Rendering.
+    ''' The engine's scripting-only features, or Nothing when it has no script host.
+    '''
+    ''' This is the one place in the shell that asks WHICH engine it has. Those
+    ''' features live on TridentEngine rather than on IBrowserEngine, and the
+    ''' capability flag is what keeps the question honest: everywhere else this page
+    ''' branches on EngineCapabilities, which is the point of having a seam at all.
     ''' </summary>
-    Private Async Sub RenderNativeButton_Click(sender As Object, e As RoutedEventArgs)
-        RenderNativeButton.IsEnabled = False
-        Try
-            Dim tabUrl As String = _session.ActiveTab.Url
-            If String.IsNullOrEmpty(tabUrl) Then
-                ParseResult.Text = Localizer.Get("ParseNoDocument")
-                Return
+    Private ReadOnly Property ScriptedEngine As TridentEngine
+        Get
+            If _engine IsNot Nothing AndAlso _engine.Capabilities.SupportsScripting Then
+                Return DirectCast(_engine, TridentEngine)
             End If
+            Return Nothing
+        End Get
+    End Property
 
-            Dim fetcher As New BrowserForWP.Diagnostics.NetDocumentFetcher(_pinTable)
-            Dim response As DocumentResponse = Await fetcher.FetchAsync(tabUrl, _appSettings.DohUrl)
+    ''' <summary>
+    ''' Resolve the setting to an engine and host it. Called with no measurement in
+    ''' hand, which is exactly why an automatic choice lands on the system engine here:
+    ''' the measurement, if there is one, arrives later, and that is what may move it.
+    ''' </summary>
+    Private Sub ApplyEngineChoice()
+        UseEngine(EngineChoice.Decide(_appSettings.EngineSetting, False, 0))
+    End Sub
 
-            If Not String.IsNullOrEmpty(response.ErrorMessage) Then
-                ParseResult.Text = Localizer.Get("ParseFailed") & " " & response.ErrorMessage
-                Return
+    ''' <summary>
+    ''' Build the chosen engine if it does not exist, attach its events once, put it in
+    ''' ContentHost and say why it was chosen. This is the only assignment to _engine,
+    ''' so no other code path can leave the shell pointed at a stale engine.
+    ''' </summary>
+    Private Sub UseEngine(chosen As String)
+        If chosen = EngineChoice.Native Then
+            If _nativeEngine Is Nothing Then
+                _nativeEngine = New BrowserForWP.Engine.NativeEngine(
+                    New BrowserForWP.Diagnostics.NetDocumentFetcher(_pinTable), _appSettings)
+                AddHandler _nativeEngine.Navigated, AddressOf OnNativeNavigated
             End If
-            If Not response.IsHtml Then
-                ParseResult.Text = Localizer.Get("ParseNoDocument")
-                Return
+            _engine = _nativeEngine
+        Else
+            If _tridentEngine Is Nothing Then
+                _tridentEngine = New TridentEngine()
+                AddHandler _tridentEngine.View.NavigationStarting, AddressOf OnNavigationStarting
+                AddHandler _tridentEngine.View.NavigationCompleted, AddressOf OnNavigationCompleted
+                AddHandler _tridentEngine.View.DOMContentLoaded, AddressOf OnDOMContentLoaded
+                ' No NavigationFailed handler: that event is deprecated on Windows Phone
+                ' 8.1 and carries no URI. Completion reports the same failure through
+                ' IsSuccess / WebErrorStatus, so failures are handled there instead.
             End If
+            _engine = _tridentEngine
+        End If
 
-            ' The preview is laid out for the width the host actually has. Before the
-            ' first layout pass that is 0, and the fallback keeps the button usable.
-            Dim viewportPx As Double = NativePreviewHost.ActualWidth
-            If viewportPx < 1 Then viewportPx = 360
+        ContentHost.Child = DirectCast(_engine.Source, UIElement)
+        EngineStatusText.Text = Localizer.Get(EngineChoice.Explain(_appSettings.EngineSetting, False, 0))
+    End Sub
 
-            Dim boxTree As BoxNode = BoxTreeBuilder.BuildPage(response.Text, BoxTreeBuilder.PageCss(response.Text))
-            Dim measurer As New BrowserForWP.Rendering.XamlTextMeasurer()
-            Dim laidOut As BrowserForWP.Core.Engine.Native.LayoutBox =
-                BrowserForWP.Core.Engine.Native.BlockLayout.Layout(boxTree, viewportPx, measurer)
-            NativePreviewHost.Child = BrowserForWP.Rendering.XamlBoxRenderer.Render(laidOut)
+    ''' <summary>
+    ''' A render by the native engine ended. It reports the same states the WebView's
+    ''' completion handler reports, through the same helpers, so a page drawn by this
+    ''' repository's own engine leaves the shell exactly where the rest of the app
+    ''' expects it to be.
+    ''' </summary>
+    Private Sub OnNativeNavigated(sender As Object, e As BrowserForWP.Engine.NativeNavigationResult)
+        If e Is Nothing Then Return
 
-            ParseResult.Text = CInt(laidOut.WidthPx).ToString() & " x " & CInt(laidOut.HeightPx).ToString() &
-                               "  " & laidOut.DescendantCount().ToString()
-        Catch ex As Exception
-            ParseResult.Text = Localizer.Get("ParseFailed") & " " & ex.Message
-        Finally
-            RenderNativeButton.IsEnabled = True
-        End Try
+        LoadProgress.Value = If(e.IsSuccess, 100, 0)
+        HideError()
+
+        If Not e.IsSuccess Then
+            ' The token is engine-level detail shown beside localized copy, the same
+            ' shape the WebView path already uses for WebErrorStatus. It is a wart
+            ' this repository records rather than one introduced here.
+            StatusText.Text = String.Empty
+            Dim failureReason As String
+            Select Case e.ErrorKind
+                Case "NotHtml"
+                    failureReason = Localizer.Get("ParseNoDocument")
+                Case "Layout"
+                    failureReason = Localizer.Get("ErrorPageFailed")
+                Case Else
+                    failureReason = Localizer.Get("ErrorNavigationFailed")
+            End Select
+            ErrorText.Text = failureReason & " (" & e.ErrorKind & ")"
+            ErrorText.Visibility = Visibility.Visible
+            RefreshTabsList()
+            Return
+        End If
+
+        StatusText.Text = Localizer.Get("LoadComplete") & "  " & _nativeEngine.LastSize
+        _session.ActiveTab.ReplaceCurrent(e.Url)
+        AddressBox.Text = _session.ActiveTab.Url
+        If Not _session.PrivateMode Then
+            _historyStore.Add(_session.ActiveTab.Url, String.Empty)
+            SaveSessionTabs()
+        End If
+        SavePersistedState()
+        RefreshTabsList()
+        RefreshHistoryList()
+        UpdateSecurityGlyph()
     End Sub
 
     ''' <summary>

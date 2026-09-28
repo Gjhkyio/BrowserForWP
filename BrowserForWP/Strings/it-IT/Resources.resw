@@ -261,6 +261,33 @@
   <data name="SearchEngineLabel" xml:space="preserve">
     <value>Motore di ricerca</value>
   </data>
+  <data name="EngineLabel" xml:space="preserve">
+    <value>Motore di rendering</value>
+  </data>
+  <data name="EngineAuto" xml:space="preserve">
+    <value>Automatico</value>
+  </data>
+  <data name="EngineTrident" xml:space="preserve">
+    <value>WebView di sistema (Trident)</value>
+  </data>
+  <data name="EngineNative" xml:space="preserve">
+    <value>Nativo di BrowserForWP</value>
+  </data>
+  <data name="EngineReasonSetting" xml:space="preserve">
+    <value>Scelto nelle Impostazioni.</value>
+  </data>
+  <data name="EngineReasonSettingNative" xml:space="preserve">
+    <value>Scelto nelle Impostazioni: questo motore disegna il markup e non esegue JavaScript.</value>
+  </data>
+  <data name="EngineReasonAutoNoMeasurement" xml:space="preserve">
+    <value>Automatico: nessuna pagina è stata ancora misurata, quindi si usa il motore di sistema.</value>
+  </data>
+  <data name="EngineReasonAutoFits" xml:space="preserve">
+    <value>Automatico: la pagina misurata funziona ancora con il motore di sistema.</value>
+  </data>
+  <data name="EngineReasonAutoTooManyMissingFeatures" xml:space="preserve">
+    <value>Automatico: alla pagina misurata mancano troppe funzionalità che il motore di sistema non ha.</value>
+  </data>
 
   <!-- Modalita leggere -->
   <data name="ReadingMode" xml:space="preserve">
@@ -295,9 +322,6 @@
   </data>
   <data name="ReaderFallback" xml:space="preserve">
     <value>Articolo semplificato</value>
-  </data>
-  <data name="RenderNatively" xml:space="preserve">
-    <value>Disegna la pagina con il motore nativo</value>
   </data>
   <data name="LiteRedirects" xml:space="preserve">
     <value>Preferisci versioni leggere</value>

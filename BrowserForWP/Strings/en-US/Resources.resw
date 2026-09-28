@@ -261,6 +261,33 @@
   <data name="SearchEngineLabel" xml:space="preserve">
     <value>Search engine</value>
   </data>
+  <data name="EngineLabel" xml:space="preserve">
+    <value>Rendering engine</value>
+  </data>
+  <data name="EngineAuto" xml:space="preserve">
+    <value>Automatic</value>
+  </data>
+  <data name="EngineTrident" xml:space="preserve">
+    <value>System WebView (Trident)</value>
+  </data>
+  <data name="EngineNative" xml:space="preserve">
+    <value>BrowserForWP native</value>
+  </data>
+  <data name="EngineReasonSetting" xml:space="preserve">
+    <value>Chosen in Settings.</value>
+  </data>
+  <data name="EngineReasonSettingNative" xml:space="preserve">
+    <value>Chosen in Settings: this engine draws markup and does not run JavaScript.</value>
+  </data>
+  <data name="EngineReasonAutoNoMeasurement" xml:space="preserve">
+    <value>Automatic: no page has been measured yet, so the system engine is used.</value>
+  </data>
+  <data name="EngineReasonAutoFits" xml:space="preserve">
+    <value>Automatic: the measured page still works in the system engine.</value>
+  </data>
+  <data name="EngineReasonAutoTooManyMissingFeatures" xml:space="preserve">
+    <value>Automatic: the measured page needs too many features the system engine lacks.</value>
+  </data>
 
   <!-- Lightweight modes -->
   <data name="ReadingMode" xml:space="preserve">
@@ -295,9 +322,6 @@
   </data>
   <data name="ReaderFallback" xml:space="preserve">
     <value>Showing simplified article</value>
-  </data>
-  <data name="RenderNatively" xml:space="preserve">
-    <value>Render current page natively</value>
   </data>
   <data name="LiteRedirects" xml:space="preserve">
     <value>Prefer light site versions</value>

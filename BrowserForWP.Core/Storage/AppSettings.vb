@@ -36,6 +36,7 @@ Namespace Storage
             BlockTrackers = True
             RestoreSession = False
             LiteRedirects = True
+            EngineSetting = Engine.EngineChoice.Auto
             LastSessionTabs = String.Empty
         End Sub
 
@@ -48,6 +49,21 @@ Namespace Storage
         Public Property BlockTrackers As Boolean
         Public Property RestoreSession As Boolean
         Public Property LiteRedirects As Boolean
+
+        ''' <summary>
+        ''' Which engine renders, as one of Engine.EngineChoice's three keywords.
+        '''
+        ''' Named EngineSetting rather than EngineChoice on purpose: VB is
+        ''' case-insensitive, so a property called EngineChoice would shadow the type
+        ''' of the same name inside this class and every use of EngineChoice.Auto
+        ''' below it would become a reference to a String.
+        '''
+        ''' Auto is the default, which means "the system engine unless a measurement
+        ''' says otherwise": upgrading this app must not change what a user sees
+        ''' without being asked.
+        ''' </summary>
+        Public Property EngineSetting As String
+
         Public Property LastSessionTabs As String
 
         ''' <summary>Build a search URL from raw query text.</summary>
@@ -121,6 +137,7 @@ Namespace Storage
             hostMap("blockTrackers") = If(BlockTrackers, "1", "0")
             hostMap("restoreSession") = If(RestoreSession, "1", "0")
             hostMap("liteRedirects") = If(LiteRedirects, "1", "0")
+            hostMap("engineSetting") = If(String.IsNullOrEmpty(EngineSetting), Engine.EngineChoice.Auto, EngineSetting)
             hostMap("lastSessionTabs") = If(LastSessionTabs, String.Empty)
             Return hostMap
         End Function
@@ -177,6 +194,12 @@ Namespace Storage
                 Else
                     LiteRedirects = (foundValue = "1")
                 End If
+            End If
+            If sourceMap.TryGetValue("engineSetting", foundValue) Then
+                ' Normalize, not a raw copy: a stored value this version does not
+                ' recognise becomes Auto instead of leaving the shell with an engine
+                ' keyword nothing understands.
+                EngineSetting = Engine.EngineChoice.Normalize(foundValue)
             End If
             If sourceMap.TryGetValue("lastSessionTabs", foundValue) Then
                 LastSessionTabs = If(foundValue, String.Empty)

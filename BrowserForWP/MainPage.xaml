@@ -145,6 +145,12 @@
                     <ComboBox x:Name="SearchEnginePicker" Width="280"
                               SelectionChanged="SearchEnginePicker_SelectionChanged"/>
 
+                    <TextBlock x:Name="EngineLabel" Margin="0,8,0,4"/>
+                    <ComboBox x:Name="EnginePicker" Width="280"
+                              SelectionChanged="EnginePicker_SelectionChanged"/>
+                    <TextBlock x:Name="EngineStatusText" TextWrapping="Wrap"
+                               FontSize="12" Opacity="0.8" Margin="0,4,0,0"/>
+
                     <TextBlock x:Name="TabsTitle" FontSize="18" Margin="0,16,0,4"/>
                     <ListBox x:Name="TabsList" Height="80" Width="280"
                              SelectionChanged="TabsList_SelectionChanged"/>
@@ -219,10 +225,9 @@
                     <TextBlock x:Name="ParseResult" TextWrapping="Wrap"
                                FontFamily="Consolas" FontSize="12"
                                MaxHeight="220" Margin="0,0,0,8" Opacity="0.85"/>
-                    <Button x:Name="RenderNativeButton" Margin="0,0,0,6"
-                            Click="RenderNativeButton_Click"/>
-                    <Border x:Name="NativePreviewHost" Height="320"
-                            BorderThickness="1" Margin="0,0,0,8"/>
+                    <!-- The native preview that used to live here is gone. Rendering a
+                         page is no longer a diagnostic: it is an engine, chosen in
+                         Settings, and it draws into ContentHost like any other page. -->
                     <Button x:Name="IeModeButton" Margin="0,0,0,6"
                             Click="IeModeButton_Click"/>
                     <TextBlock x:Name="IeModeResult" TextWrapping="Wrap"
