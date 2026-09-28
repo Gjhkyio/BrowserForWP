@@ -4,8 +4,8 @@
  *
  * WHY THIS EXISTS
  * ---------------
- * BrowserForWP implements HKDF, X25519, ChaCha20-Poly1305 and the TLS 1.3 key
- * schedule in VB.NET, which can only be compiled on Windows with the Windows
+ * BrowserForWP implements HKDF, X25519, AES-GCM and the TLS 1.3 key schedule in
+ * VB.NET, which can only be compiled on Windows with the Windows
  * Phone 8.1 SDK. The algorithms are language-independent, so this script:
  *
  *   1. Recomputes every value from the RFCs using Node's native crypto.
@@ -21,7 +21,6 @@
  * -------
  *   RFC 5869  HKDF
  *   RFC 7748  X25519
- *   RFC 8439  ChaCha20-Poly1305
  *   RFC 8448  TLS 1.3 handshake trace (key schedule anchors)
  *   NIST CAVS AES-GCM
  *
@@ -237,24 +236,14 @@ const ITER_OUT = 'c3da55379de9c6908e94ea4df28d084f32eccf03491c71f754b4075577a285
 assertEqual('X25519 §5.2 one iteration', x25519(ITER_SCALAR, ITER_U), ITER_OUT);
 
 // ══════════════════════════════════════════════════════════════════════════
-// 3. ChaCha20-Poly1305 — RFC 8439 §2.8.2
+// 3. AEAD helpers, used by the AES-GCM section below
 // ══════════════════════════════════════════════════════════════════════════
-console.log('\n[3/6] ChaCha20-Poly1305 — RFC 8439 §2.8.2');
-
-const CC_KEY = h2b('808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9f');
-const CC_NONCE = h2b('070000004041424344454647');
-const CC_AAD = h2b('50515253c0c1c2c3c4c5c6c7');
-const CC_PT = Buffer.from(
-  "Ladies and Gentlemen of the class of '99: If I could offer you only one tip " +
-    'for the future, sunscreen would be it.',
-  'ascii',
-);
-const CC_CT =
-  'd31a8d34648e60db7b86afbc53ef7ec2a4aded51296e08fea9e2b5a736ee62d6' +
-  '3dbea45e8ca9671282fafb69da92728b1a71de0a9e060b2905d6a5b67ecd3b36' +
-  '92ddbd7f2d778b8c9803aee328091b58fab324e4fad675945585808b4831d7bc' +
-  '3ff4def08e4b7a9de576d26586cec64b6116';
-const CC_TAG = '1ae10b594f09e26a7e902ecbd0600691';
+// NOTE: ChaCha20-Poly1305 (RFC 8439) is deliberately NOT verified here.
+// BrowserForWP offers exactly one TLS 1.3 suite, TLS_AES_128_GCM_SHA256 — which
+// RFC 8446 §9.1 makes mandatory-to-implement, so there is no interoperability
+// cost — and that suite is served by the platform's accelerated AES-GCM. A
+// managed AEAD would have been dead code carrying real risk. This tool verifies
+// what actually ships.
 
 function aeadSeal(alg, key, nonce, aad, plaintext, tagLen = 16) {
   const c = crypto.createCipheriv(alg, key, nonce, { authTagLength: tagLen });
@@ -270,19 +259,10 @@ function aeadOpen(alg, key, nonce, aad, ct, tag, tagLen = 16) {
   return Buffer.concat([d.update(ct), d.final()]);
 }
 
-const cc = aeadSeal('chacha20-poly1305', CC_KEY, CC_NONCE, CC_AAD, CC_PT);
-assertEqual('ChaCha20-Poly1305 §2.8.2 ciphertext', cc.ct, CC_CT);
-assertEqual('ChaCha20-Poly1305 §2.8.2 tag', cc.tag, CC_TAG);
-assertEqual(
-  'ChaCha20-Poly1305 §2.8.2 round-trip',
-  aeadOpen('chacha20-poly1305', CC_KEY, CC_NONCE, CC_AAD, cc.ct, cc.tag),
-  b2h(CC_PT),
-);
-
 // ══════════════════════════════════════════════════════════════════════════
 // 4. AES-GCM — NIST CAVS
 // ══════════════════════════════════════════════════════════════════════════
-console.log('\n[4/6] AES-GCM — NIST CAVS (zero-key cases)');
+console.log('\n[3/5] AES-GCM — NIST CAVS (zero-key cases)');
 
 const Z16 = h2b('00'.repeat(16));
 const Z12 = h2b('00'.repeat(12));
@@ -308,7 +288,7 @@ assertEqual(
 // ══════════════════════════════════════════════════════════════════════════
 // 5. TLS 1.3 key schedule — RFC 8448 §3 anchors
 // ══════════════════════════════════════════════════════════════════════════
-console.log('\n[5/6] TLS 1.3 key schedule — RFC 8448 §3');
+console.log('\n[4/5] TLS 1.3 key schedule — RFC 8448 §3');
 
 const r8448 = {
   clientPriv: '49 af 42 ba 7f 79 94 85 2d 71 3e f2 78 4b cb ca a7 91 1d e2 6a dc 56 42 cb 63 45 40 e7 ea 50 05',
@@ -557,7 +537,7 @@ assertEqual(
 // ══════════════════════════════════════════════════════════════════════════
 // 6. Emit
 // ══════════════════════════════════════════════════════════════════════════
-console.log(`\n[6/6] Emission — ${checks} assertions, ${failures} failure(s)`);
+console.log(`\n[5/5] Emission — ${checks} assertions, ${failures} failure(s)`);
 
 if (failures > 0) {
   console.error(`\n✗ ${failures} vector(s) did NOT match the published RFC text.`);
@@ -577,7 +557,6 @@ const vectorJson = {
   verifiedAgainst: [
     'RFC 5869 A.1-A.3',
     'RFC 7748 §5.2, §6.1',
-    'RFC 8439 §2.8.2',
     'RFC 8448 §3',
     'NIST CAVS AES-GCM',
   ],
@@ -591,14 +570,6 @@ const vectorJson = {
     iterScalar: b2h(ITER_SCALAR),
     iterU: b2h(ITER_U),
     iterOut: ITER_OUT,
-  },
-  chacha20Poly1305: {
-    key: b2h(CC_KEY),
-    nonce: b2h(CC_NONCE),
-    aad: b2h(CC_AAD),
-    plaintext: b2h(CC_PT),
-    ciphertext: CC_CT,
-    tag: CC_TAG,
   },
   aesGcm: {
     key128: b2h(Z16),
@@ -658,8 +629,8 @@ vb += `'     Every value below was recomputed from first principles and asserted
 vb += `'     against the constant published in the source document before being\n`;
 vb += `'     written out. Regenerate with:  node tools/gen-vectors.mjs\n`;
 vb += `'\n`;
-vb += `'     Sources: RFC 5869 A.1-A.3, RFC 7748 5.2/6.1, RFC 8439 2.8.2,\n`;
-vb += `'              RFC 8448 3, NIST CAVS AES-GCM.\n`;
+vb += `'     Sources: RFC 5869 A.1-A.3, RFC 7748 5.2/6.1, RFC 8448 3,\n`;
+vb += `'              NIST CAVS AES-GCM.\n`;
 vb += `' </auto-generated>\n`;
 vb += `\n`;
 vb += `Namespace CryptoTests\n`;
@@ -688,14 +659,6 @@ vb += vbBytes('X25519Shared', vectorJson.x25519.shared);
 vb += vbBytes('X25519IterScalar', vectorJson.x25519.iterScalar);
 vb += vbBytes('X25519IterU', vectorJson.x25519.iterU);
 vb += vbBytes('X25519IterOut', vectorJson.x25519.iterOut);
-vb += `\n`;
-
-vb += vbBytes('ChaChaKey', vectorJson.chacha20Poly1305.key);
-vb += vbBytes('ChaChaNonce', vectorJson.chacha20Poly1305.nonce);
-vb += vbBytes('ChaChaAad', vectorJson.chacha20Poly1305.aad);
-vb += vbBytes('ChaChaPlaintext', vectorJson.chacha20Poly1305.plaintext);
-vb += vbBytes('ChaChaCiphertext', vectorJson.chacha20Poly1305.ciphertext);
-vb += vbBytes('ChaChaTag', vectorJson.chacha20Poly1305.tag);
 vb += `\n`;
 
 vb += vbBytes('AesGcmKey128', vectorJson.aesGcm.key128);

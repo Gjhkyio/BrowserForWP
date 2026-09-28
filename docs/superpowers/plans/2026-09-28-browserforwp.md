@@ -8,6 +8,67 @@
 
 **Tech Stack:** VB.NET / WinRT 8.1, XAML, `Windows.Networking.Sockets.StreamSocket`, `Windows.Security.Cryptography.Core`, MSTest for unit tests, Node.js (tooling only, never shipped), Python 3 (asset generation only).
 
+## Revision — 2026-09-28, after API research
+
+Three assumptions in the first draft of this plan were wrong. They were found by
+checking the WP8.1 WinRT API surface rather than trusting desktop .NET habits,
+and the affected tasks below have been revised in the code.
+
+1. **`System.Security.Cryptography` is largely absent.** `SHA256`,
+   `HMACSHA256` and `RNGCryptoServiceProvider` do not exist in the ".NET for
+   Windows Store apps" profile, so the original HKDF and X25519 could not have
+   compiled. Everything now routes through `WinRtCrypto`
+   (`Windows.Security.Cryptography.Core`). `RegexOptions.Compiled` is also
+   unsupported.
+2. **`BigInteger` is unconfirmed.** Its presence in this profile could not be
+   established, so it was removed rather than bet on. X25519 field arithmetic is
+   now radix-2^16 in `Int64` — chosen because power-of-two limbs make weights add
+   exactly — and is **proven** by `tools/proto/w25519.mjs`, a line-for-line
+   runnable prototype, before being transliterated to VB.
+3. **A managed AEAD is unnecessary.** Offering only `TLS_AES_128_GCM_SHA256`
+   (mandatory-to-implement per RFC 8446 §9.1, so zero interoperability cost) lets
+   the platform's accelerated AES-GCM serve every record. Task 4
+   (ChaCha20-Poly1305) is therefore **cancelled**, and the ChaCha vectors were
+   removed from `tools/gen-vectors.mjs` rather than left verifying code that does
+   not ship. The verified assertion count is now **52**, not 55.
+
+**New required reading before touching the crypto:**
+`docs/ARCHITECTURE.md`, section "The crypto API surface on WP8.1 WinRT".
+
+## Revision 2 — implementation status
+
+Tasks 1-3 and 6-11 are **implemented**. Task 4 (ChaCha20-Poly1305) is
+**cancelled** and Task 5 is folded into Task 3. The tasks that were not written
+from this document are listed below with where their verification actually came
+from, because the verification is the part that matters:
+
+| Task | Status | Verified by |
+| --- | --- | --- |
+| 1-3 Crypto (HKDF, X25519, AES-GCM) | Implemented | `tools/gen-vectors.mjs` (52 assertions), `tools/proto/w25519.mjs` (18 checks) |
+| 4 ChaCha20-Poly1305 | **Cancelled** — see Revision | n/a |
+| 6 TLS 1.3 key schedule | Implemented | `tools/proto/tls13.mjs`, live handshake |
+| 7 Record layer | Implemented | `tools/proto/tls13.mjs`, live handshake |
+| 8 Handshake client | Implemented | `tools/proto/tls13.mjs`, live handshake |
+| 9 DoH resolver | Implemented | RFC 1035 wire format; needs a handset to exercise end to end |
+| 10 Localization | Implemented | 27/27 resw keys present in both languages |
+| 11 UI + wiring | Implemented | Builds in Visual Studio only (no WP8.1 SDK off-Windows) |
+
+**The important change since this plan was written:** Tasks 6-9 are no longer
+specified by prose and then transliterated blind. `tools/proto/tls13.mjs` is a
+complete, runnable TLS 1.3 client that completes real handshakes with real
+servers, and `BrowserForWP.Net/Tls13/` is its transliteration. That prototype
+found three protocol bugs and one standards violation that no amount of local
+testing would have caught — they are tabulated in `docs/ARCHITECTURE.md` under
+"The TLS 1.3 prototype".
+
+**Therefore:** for anything under `BrowserForWP.Net/Tls13/`, change
+`tools/proto/tls13.mjs` first and watch it pass against a live host. Do not edit
+the VB and hope.
+
+Still not written, and not needed for the app to build: the two `tests/`
+projects are referenced by this plan but only
+`tests/BrowserForWP.Crypto.Tests/Vectors.generated.vb` exists so far.
+
 ## Global Constraints
 
 - **Target:** `TargetPlatformVersion 8.1`, `WindowsPhoneApp`, VB.NET. Builds in Visual Studio 2013 Update 4+ on Windows only.
@@ -17,7 +78,7 @@
 - **TLS ceiling through the OS is TLS 1.2.** TLS 1.3 is available only through `Tls13Client` in the app's own transport, never through the `WebView`.
 - **`en-US` is the default and fallback language.** `it-IT` is the secondary. Every user-visible string exists in both.
 - **Layer discipline.** Crypto knows nothing about TLS; TLS knows nothing about the UI; Core knows nothing about crypto.
-- **Verification floor:** `node tools/gen-vectors.mjs` must print `55 assertions, 0 failure(s)` after any change to `BrowserForWP.Crypto/`.
+- **Verification floor:** `node tools/gen-vectors.mjs` must print `52 assertions, 0 failure(s)` after any change to `BrowserForWP.Crypto/`.
 
 ---
 
@@ -287,7 +348,7 @@ Expected: 4 tests PASS.
 ```bash
 node tools/gen-vectors.mjs
 ```
-Expected: `55 assertions, 0 failure(s)`
+Expected: `52 assertions, 0 failure(s)`
 
 - [ ] **Step 6: Commit**
 
@@ -493,6 +554,12 @@ git commit -m "feat(crypto): add X25519 key agreement over Curve25519"
 ### Task 4: BrowserForWP.Crypto — ChaCha20-Poly1305
 
 **Files:**
+> **CANCELLED — see Revision and Revision 2 at the top of this document.**
+> BrowserForWP ships exactly one cipher suite (`TLS_AES_128_GCM_SHA256`), so no
+> managed AEAD is needed and `BrowserForWP.Crypto/ChaCha20Poly1305.vb` does not
+> and should not exist. Do not implement this task. The steps below are retained
+> only as a record of the original plan.
+
 - Create: `BrowserForWP.Crypto/ChaCha20Poly1305.vb`
 - Test: `tests/BrowserForWP.Crypto.Tests/ChaCha20Poly1305Tests.vb`
 
@@ -1038,10 +1105,26 @@ git commit -m "feat(tls): add TLS 1.3 key schedule verified against RFC 8448"
 - Test: `tests/BrowserForWP.Crypto.Tests/TlsRecordLayerTests.vb`
 
 **Interfaces:**
-- Consumes: `AesGcm`, `ChaCha20Poly1305`, `Hkdf`.
+- Consumes: `AesGcm`, `Hkdf`.
 - Produces:
   - `Public Enum ContentType` — `ChangeCipherSpec = 20`, `Alert = 21`, `Handshake = 22`, `ApplicationData = 23`.
-  - `Public Enum CipherSuite` — `Aes128GcmSha256 = &H1301`, `Aes256GcmSha384 = &H1302`, `ChaCha20Poly1305Sha256 = &H1303`.
+  - `Public Enum CipherSuite` — `Aes128GcmSha256 = &H1301` **only**.
+
+> **Revised by Revision 2.** The original task listed three cipher suites and a
+> managed ChaCha20-Poly1305. BrowserForWP offers exactly one suite,
+> `TLS_AES_128_GCM_SHA256`, which RFC 8446 §9.1 makes mandatory-to-implement, so
+> the offer costs nothing in interoperability and no managed AEAD is required.
+> The steps below still refer to `ChaCha20Poly1305` in places; ignore those
+> references. The implemented file is `BrowserForWP.Net/Tls13/TlsRecordLayer.vb`,
+> and its interface is:
+>
+> - `Public Sub New(key As Byte(), iv As Byte())`
+> - `Public Function Seal(contentType As ContentType, payload As Byte()) As Byte()`
+> - `Public Function Open(header As Byte(), body As Byte()) As OpenedRecord`
+>
+> Note that `Open` takes the 5-byte header separately, because the header is the
+> AEAD's associated data and must be authenticated exactly as it appeared on the
+> wire.
   - `Public NotInheritable Class TlsRecordLayer`
     - `Public Sub New(suite As CipherSuite, key As Byte(), iv As Byte())`
     - `Public Function Seal(contentType As ContentType, payload As Byte()) As Byte()`

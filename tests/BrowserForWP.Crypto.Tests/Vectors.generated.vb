@@ -5,8 +5,8 @@
 '     against the constant published in the source document before being
 '     written out. Regenerate with:  node tools/gen-vectors.mjs
 '
-'     Sources: RFC 5869 A.1-A.3, RFC 7748 5.2/6.1, RFC 8439 2.8.2,
-'              RFC 8448 3, NIST CAVS AES-GCM.
+'     Sources: RFC 5869 A.1-A.3, RFC 7748 5.2/6.1, RFC 8448 3,
+'              NIST CAVS AES-GCM.
 ' </auto-generated>
 
 Namespace CryptoTests
@@ -121,38 +121,6 @@ Namespace CryptoTests
         &HC3, &HDA, &H55, &H37, &H9D, &HE9, &HC6, &H90, &H8E, &H94, &HEA, &H4D, _
         &HF2, &H8D, &H08, &H4F, &H32, &HEC, &HCF, &H03, &H49, &H1C, &H71, &HF7, _
         &H54, &HB4, &H07, &H55, &H77, &HA2, &H85, &H52}
-
-    Public ReadOnly ChaChaKey As Byte() = New Byte() { _
-        &H80, &H81, &H82, &H83, &H84, &H85, &H86, &H87, &H88, &H89, &H8A, &H8B, _
-        &H8C, &H8D, &H8E, &H8F, &H90, &H91, &H92, &H93, &H94, &H95, &H96, &H97, _
-        &H98, &H99, &H9A, &H9B, &H9C, &H9D, &H9E, &H9F}
-    Public ReadOnly ChaChaNonce As Byte() = {&H07, &H00, &H00, &H00, &H40, &H41, &H42, &H43, &H44, &H45, &H46, &H47}
-    Public ReadOnly ChaChaAad As Byte() = {&H50, &H51, &H52, &H53, &HC0, &HC1, &HC2, &HC3, &HC4, &HC5, &HC6, &HC7}
-    Public ReadOnly ChaChaPlaintext As Byte() = New Byte() { _
-        &H4C, &H61, &H64, &H69, &H65, &H73, &H20, &H61, &H6E, &H64, &H20, &H47, _
-        &H65, &H6E, &H74, &H6C, &H65, &H6D, &H65, &H6E, &H20, &H6F, &H66, &H20, _
-        &H74, &H68, &H65, &H20, &H63, &H6C, &H61, &H73, &H73, &H20, &H6F, &H66, _
-        &H20, &H27, &H39, &H39, &H3A, &H20, &H49, &H66, &H20, &H49, &H20, &H63, _
-        &H6F, &H75, &H6C, &H64, &H20, &H6F, &H66, &H66, &H65, &H72, &H20, &H79, _
-        &H6F, &H75, &H20, &H6F, &H6E, &H6C, &H79, &H20, &H6F, &H6E, &H65, &H20, _
-        &H74, &H69, &H70, &H20, &H66, &H6F, &H72, &H20, &H74, &H68, &H65, &H20, _
-        &H66, &H75, &H74, &H75, &H72, &H65, &H2C, &H20, &H73, &H75, &H6E, &H73, _
-        &H63, &H72, &H65, &H65, &H6E, &H20, &H77, &H6F, &H75, &H6C, &H64, &H20, _
-        &H62, &H65, &H20, &H69, &H74, &H2E}
-    Public ReadOnly ChaChaCiphertext As Byte() = New Byte() { _
-        &HD3, &H1A, &H8D, &H34, &H64, &H8E, &H60, &HDB, &H7B, &H86, &HAF, &HBC, _
-        &H53, &HEF, &H7E, &HC2, &HA4, &HAD, &HED, &H51, &H29, &H6E, &H08, &HFE, _
-        &HA9, &HE2, &HB5, &HA7, &H36, &HEE, &H62, &HD6, &H3D, &HBE, &HA4, &H5E, _
-        &H8C, &HA9, &H67, &H12, &H82, &HFA, &HFB, &H69, &HDA, &H92, &H72, &H8B, _
-        &H1A, &H71, &HDE, &H0A, &H9E, &H06, &H0B, &H29, &H05, &HD6, &HA5, &HB6, _
-        &H7E, &HCD, &H3B, &H36, &H92, &HDD, &HBD, &H7F, &H2D, &H77, &H8B, &H8C, _
-        &H98, &H03, &HAE, &HE3, &H28, &H09, &H1B, &H58, &HFA, &HB3, &H24, &HE4, _
-        &HFA, &HD6, &H75, &H94, &H55, &H85, &H80, &H8B, &H48, &H31, &HD7, &HBC, _
-        &H3F, &HF4, &HDE, &HF0, &H8E, &H4B, &H7A, &H9D, &HE5, &H76, &HD2, &H65, _
-        &H86, &HCE, &HC6, &H4B, &H61, &H16}
-    Public ReadOnly ChaChaTag As Byte() = New Byte() { _
-        &H1A, &HE1, &H0B, &H59, &H4F, &H09, &HE2, &H6A, &H7E, &H90, &H2E, &HCB, _
-        &HD0, &H60, &H06, &H91}
 
     Public ReadOnly AesGcmKey128 As Byte() = New Byte() { _
         &H00, &H00, &H00, &H00, &H00, &H00, &H00, &H00, &H00, &H00, &H00, &H00, _

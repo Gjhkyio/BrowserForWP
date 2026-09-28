@@ -41,15 +41,20 @@ Namespace Browser
         ''' <summary>Schemes we will navigate to. Everything else is refused.</summary>
         Private Shared ReadOnly AllowedSchemes As String() = {"http", "https"}
 
-        ''' <summary>Host, optional port, optional path/query/fragment.</summary>
+        ''' <summary>
+        ''' Host, optional port, optional path/query/fragment.
+        '''
+        ''' Note the absence of RegexOptions.Compiled: the WinRT profile does not
+        ''' support runtime code generation for regexes, so Compiled is at best
+        ''' ignored and at worst throws. Interpreted evaluation is correct here and
+        ''' the patterns are trivial.
+        ''' </summary>
         Private Shared ReadOnly HostWithOptionalParts As New Regex(
-            "^[A-Za-z0-9]([A-Za-z0-9\-]*[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9\-]*[A-Za-z0-9])?)*(\:[0-9]{1,5})?([/?#].*)?$",
-            RegexOptions.Compiled)
+            "^[A-Za-z0-9]([A-Za-z0-9\-]*[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9\-]*[A-Za-z0-9])?)*(\:[0-9]{1,5})?([/?#].*)?$")
 
         ''' <summary>A hostname: at least one dot, a TLD of 2+ letters.</summary>
         Private Shared ReadOnly DottedHost As New Regex(
-            "^([A-Za-z0-9]([A-Za-z0-9\-]*[A-Za-z0-9])?\.)+[A-Za-z]{2,}$",
-            RegexOptions.Compiled)
+            "^([A-Za-z0-9]([A-Za-z0-9\-]*[A-Za-z0-9])?\.)+[A-Za-z]{2,}$")
 
         Private Sub New()
         End Sub

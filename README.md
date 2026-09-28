@@ -68,8 +68,8 @@ BrowserForWP/
 │   ├── Assets/                Logo, tiles, splash (generated)
 │   └── Strings/               en-US / it-IT UI resources
 ├── BrowserForWP.Core/         Engine abstraction, tabs, history, address bar
-├── BrowserForWP.Net/          TLS 1.3, DoH, HTTP client
-├── BrowserForWP.Crypto/       HKDF, X25519, ChaCha20-Poly1305, AES-GCM
+├── BrowserForWP.Net/          TLS 1.3, DoH, HTTP/1.1 client
+├── BrowserForWP.Crypto/       HKDF, X25519, AES-128-GCM
 ├── BrowserForWP.Localization/ Language resolution + string lookup
 ├── BrowserForWP.Polyfill/     On-device JS compatibility bundle
 ├── docs/

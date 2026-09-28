@@ -16,7 +16,12 @@
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
     <ProjectGuid>{C0DE0001-0001-4A2B-9C3D-1B2C3D4E5F01}</ProjectGuid>
     <OutputType>Library</OutputType>
-    <RootNamespace>BrowserForWP.Crypto</RootNamespace>
+    <!-- RootNamespace is the PREFIX that is prepended to every file's own
+         Namespace block. The sources declare `Namespace Crypto`, so this must be
+         `BrowserForWP` for the types to land at BrowserForWP.Crypto.*. Setting it
+         to `BrowserForWP.Crypto` here would put them at
+         BrowserForWP.Crypto.Crypto.* and break every `Imports BrowserForWP.Crypto`. -->
+    <RootNamespace>BrowserForWP</RootNamespace>
     <AssemblyName>BrowserForWP.Crypto</AssemblyName>
     <DefaultLanguage>en-US</DefaultLanguage>
     <TargetPlatformVersion>8.1</TargetPlatformVersion>
@@ -95,8 +100,8 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="AesGcm.vb" />
-    <Compile Include="ChaCha20Poly1305.vb" />
     <Compile Include="Hkdf.vb" />
+    <Compile Include="WinRtCrypto.vb" />
     <Compile Include="X25519.vb" />
   </ItemGroup>
   <ItemGroup>
@@ -106,7 +111,11 @@
     <Import Include="System.Collections.Generic" />
     <Import Include="System.Diagnostics" />
     <Import Include="System.Linq" />
+    <Import Include="System.Text" />
     <Import Include="System.Threading.Tasks" />
+    <Import Include="Windows.Security.Cryptography" />
+    <Import Include="Windows.Security.Cryptography.Core" />
+    <Import Include="Windows.Storage.Streams" />
   </ItemGroup>
   <PropertyGroup Condition=" '$(VisualStudioVersion)' == '' or '$(VisualStudioVersion)' &lt; '12.0' ">
     <VisualStudioVersion>12.0</VisualStudioVersion>

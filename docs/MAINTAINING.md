@@ -35,22 +35,54 @@ desktop .NET.
 Run these before committing. They are cheap and each covers a different layer.
 
 ```bash
-# Crypto + TLS 1.3 key schedule. Runs anywhere. Must print "55 assertions, 0 failure(s)".
+# Crypto + TLS 1.3 key schedule. Runs anywhere. Must print "52 assertions, 0 failure(s)".
 node tools/gen-vectors.mjs
 
 # Verify only, writing nothing. Useful in CI.
 node tools/gen-vectors.mjs --check
 
+# X25519 limb arithmetic. Must print "18 checks, 0 failure(s)".
+# This is a line-for-line prototype of X25519.vb and is the ONLY way to verify
+# that file off-Windows. If it fails, fix the prototype, not the VB.
+node tools/proto/w25519.mjs
+
+# The TLS 1.3 client. Must print "31 checks, 0 failure(s)".
+# This one needs NETWORK access: it performs a real handshake with a real
+# server. It is the transliteration source for BrowserForWP.Net/Tls13/, and the
+# only check that can catch a protocol-level mistake, because a self-consistent
+# TLS client round-trips its own bugs happily.
+node tools/proto/tls13.mjs example.com
+node tools/proto/tls13.mjs www.google.com
+node tools/proto/tls13.mjs cloudflare.com
+
+# Confirm the polyfill shim is valid ES5 (comment-aware, so it does not
+# false-positive on backticks inside comments).
+node tools/check-polyfill.mjs
+
 # Regenerate every WP8.1 image asset from the renderer.
 python3 tools/make_logo.py
-
-# Confirm the polyfill shim is valid ES5.
-node -e "new Function(require('fs').readFileSync('BrowserForWP.Polyfill/compat.js','utf8')); console.log('OK')"
 ```
 
 In Visual Studio, run the `BrowserForWP.Crypto.Tests` project from Test Explorer.
 Those tests consume `Vectors.generated.vb`, which is **generated** — never edit
 it by hand. Regenerate with `node tools/gen-vectors.mjs`.
+
+## Do not use these APIs in BrowserForWP.Crypto
+
+A WP8.1 WinRT app compiles against the ".NET for Windows Store apps" profile.
+None of the following exist, and none of them are compile errors you can fix
+locally — the namespaces are simply absent:
+
+- `System.Security.Cryptography.SHA256`, `SHA256Managed`, `HashAlgorithm`
+- `System.Security.Cryptography.HMACSHA256`, `KeyedHashAlgorithm`
+- `System.Security.Cryptography.RNGCryptoServiceProvider`, `RandomNumberGenerator`
+- `System.Security.Cryptography.AesGcm`
+
+Use `WinRtCrypto` instead, which wraps `Windows.Security.Cryptography.Core`.
+See [`ARCHITECTURE.md`](ARCHITECTURE.md#the-crypto-api-surface-on-wp81-winrt--read-this-before-editing-crypto)
+for the replacement table.
+
+`RegexOptions.Compiled` is also unsupported in this profile — do not add it back.
 
 ## Adding a test vector
 
@@ -128,7 +160,7 @@ repeats to the user — see the guard in the plan's Task 11, Step 3.
 
 ## Release checklist
 
-- [ ] `node tools/gen-vectors.mjs` → `55 assertions, 0 failure(s)`
+- [ ] `node tools/gen-vectors.mjs` → `52 assertions, 0 failure(s)`
 - [ ] `python3 tools/make_logo.py` → all assets regenerated, no diff
 - [ ] Polyfill ES5 check passes
 - [ ] Visual Studio: `Debug | ARM` → `Build succeeded`

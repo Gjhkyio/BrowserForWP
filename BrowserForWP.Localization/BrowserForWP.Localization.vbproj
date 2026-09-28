@@ -15,7 +15,11 @@
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
     <ProjectGuid>{C0DE0003-0003-4A2B-9C3D-1B2C3D4E5F03}</ProjectGuid>
     <OutputType>Library</OutputType>
-    <RootNamespace>BrowserForWP.Localization</RootNamespace>
+    <!-- See BrowserForWP.Crypto.vbproj: RootNamespace is prepended to the file's
+         own Namespace block, and the sources declare `Namespace Localization`.
+         This must be `BrowserForWP` for the types to land at
+         BrowserForWP.Localization.*, which is what MainPage.xaml.vb imports. -->
+    <RootNamespace>BrowserForWP</RootNamespace>
     <AssemblyName>BrowserForWP.Localization</AssemblyName>
     <DefaultLanguage>en-US</DefaultLanguage>
     <TargetPlatformVersion>8.1</TargetPlatformVersion>

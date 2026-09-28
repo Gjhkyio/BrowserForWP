@@ -48,6 +48,27 @@ cannot host Chromium or Firefox, cannot replace Trident, and cannot exceed
 TLS 1.2 through the OS. Anything that assumes otherwise is a plan error. See
 [`docs/ARCHITECTURE.md`](../../../docs/ARCHITECTURE.md#the-three-platform-laws).
 
+**Second hard constraint — the API surface.** A WP8.1 WinRT app compiles against
+the ".NET for Windows Store apps" profile, *not* desktop .NET. `SHA256`,
+`HMACSHA256` and `RNGCryptoServiceProvider` do **not exist** there; use
+`WinRtCrypto` (`Windows.Security.Cryptography.Core`). `RegexOptions.Compiled` is
+unsupported. Before introducing any `System.*` type, confirm it exists in that
+profile — do not assume a desktop API is available.
+
+**Third — never edit `X25519.vb` or `BrowserForWP.Net/Tls13/` by hand.** Both
+are transliterations of executable prototypes, and those prototypes are the only
+real checks available off-Windows. Change the prototype first, watch it pass, then
+port the change:
+
+- `X25519.vb` -> `tools/proto/w25519.mjs` -> `18 checks, 0 failure(s)`
+- `BrowserForWP.Net/Tls13/*` -> `tools/proto/tls13.mjs` -> `31 checks, 0 failure(s)`
+
+**Fourth — a self-consistent TLS client proves nothing.** Sealing and opening your
+own records will round-trip any bug that is symmetric. `tools/proto/tls13.mjs`
+completes handshakes with real servers precisely so that field-order and
+length-prefix mistakes cannot hide; three such bugs were found this way. If you
+change record framing or ClientHello layout, re-run it against a live host.
+
 ## Step 4 — Verification commands
 
 Run the checks for the layer you actually changed. Do not claim a layer is
@@ -55,8 +76,11 @@ verified if you skipped its command.
 
 | You changed | Run | Expected |
 | --- | --- | --- |
-| Anything in `BrowserForWP.Crypto/` | `node tools/gen-vectors.mjs` | `55 assertions, 0 failure(s)` |
+| Anything in `BrowserForWP.Crypto/` | `node tools/gen-vectors.mjs` | `52 assertions, 0 failure(s)` |
+| `X25519.vb` (or its prototype) | `node tools/proto/w25519.mjs` | `18 checks, 0 failure(s)` |
+| Anything in `BrowserForWP.Net/Tls13/` | `node tools/proto/tls13.mjs example.com` | `31 checks, 0 failure(s)` |
 | Test vectors themselves | `node tools/gen-vectors.mjs` | every line prefixed `✓`, exit code 0 |
+| `BrowserForWP.Polyfill/compat.js` | `node tools/check-polyfill.mjs` | `is valid ES5` |
 | `BrowserForWP/Assets/**` | `python3 tools/make_logo.py` | one line per generated PNG, exit code 0 |
 | UI / XAML / VB app code | Build in Visual Studio: `Debug \| ARM` | `Build succeeded` |
 | Crypto unit tests | Test Explorer → run `BrowserForWP.Crypto.Tests` | all tests green |
