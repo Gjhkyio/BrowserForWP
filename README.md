@@ -52,7 +52,10 @@ modern engine, the transport and content layers come with you.
 - **DNS over HTTPS (RFC 8484)** — resolves hostnames off the wire, so a stale
   or hijacked local resolver cannot break or redirect you.
 - **Certificate pinning** — user-managed per-site pins with explicit,
-  reversible override.
+  reversible override (remove the pin to undo it). The pin is checked against
+  the leaf's SPKI when the app's own TLS 1.3 transport connects. The `WebView`'s
+  traffic rides Schannel, whose validation this app cannot hook, so a pin
+  protects the transport layer — it does not pin the pages you visit.
 - **ES5 compatibility bundle** (`BrowserForWP.Polyfill/compat.js`) — written,
   ES5-checked, packaged, and injected at `DOMContentLoaded` and on completion
   via `TridentEngine.InjectPolyfillAsync`. Raises the floor; cannot parse ES6

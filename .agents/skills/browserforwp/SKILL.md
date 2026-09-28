@@ -89,12 +89,51 @@ port the change:
 
 - `X25519.vb` -> `tools/proto/w25519.mjs` -> `18 checks, 0 failure(s)`
 - `BrowserForWP.Net/Tls13/*` -> `tools/proto/tls13.mjs` -> `31 checks, 0 failure(s)`
+- `BrowserForWP.Net/Tls13/PinStore.vb` -> `tools/proto/pinstore.mjs` -> `0 failure(s)`
+
+`PinStore.vb` is pure host/pin logic rather than protocol code, so its mirror is
+a plain logic mirror like `core-logic.mjs`, not a wire-format prototype. It still
+falls under the rule: change the mirror, watch it pass, then port.
 
 **Fourth — a self-consistent TLS client proves nothing.** Sealing and opening your
 own records will round-trip any bug that is symmetric. `tools/proto/tls13.mjs`
 completes handshakes with real servers precisely so that field-order and
 length-prefix mistakes cannot hide; three such bugs were found this way. If you
 change record framing or ClientHello layout, re-run it against a live host.
+
+**Fifth — the profile and the project files have their own failure families.** The
+Round 5 merge review (PR #2) added four, every one of which passed
+`tools/check-vb.mjs` and still failed the real build:
+
+- **`List(Of T).AsReadOnly()` does not exist in the profile.**
+  `ReadOnlyCollection(Of T)` is missing, so the call is `BC30456`, not a silent
+degradation. Copy the list instead. Same family as the `SHA256` gap, and the
+checker does not know this member.
+- **A `Configuration|Platform` pair with no `PropertyGroup`.** A project added to
+  `BrowserForWP.sln` with `Debug|ARM.Build.0 = Debug|ARM` whose `.vbproj` defines
+  only `Debug|AnyCPU` fails the *entire* build inside
+  `Microsoft.Common.CurrentVersion.targets` with "The OutputPath property is not
+  set for project … Configuration='Debug' Platform='ARM'". The message names the
+  pair, never the missing group. Every library here defines all six.
+- **Generated code needs its own invariant, not just checked inputs.**
+  `gen-vectors.mjs` emitted `New Byte() { _` with no closing brace for a
+  zero-length vector, so RFC 5869 case 3 (empty salt *and* empty info) produced a
+  file that did not compile (`BC30201`). The generator now asserts brace balance
+  on its own output and refuses to write an unbalanced file.
+- **Deprecated WinRT APIs are `BC40000` here.** `WebView.NavigationFailed` and
+  `DataPackage.SetUri`. Use `NavigationCompleted`'s `IsSuccess` /
+  `WebErrorStatus` — which carry the reason the deprecated event does not — and
+  `DataPackage.SetWebLink`. A build with zero warnings is the goal; a new
+  `BC40000` is a design question, not noise to allow-list.
+
+**Sixth — a merged pull request is unreviewed code until the guest build says
+otherwise.** PR #2 arrived as twenty commits that had never been compiled on the
+real toolchain; the first guest build failed on four defects at once. A PR's own
+verification section is a claim, not evidence, and "the author says it is
+tested" is exactly the assumption this repository exists to stop making. Run
+`tools\vm-build.cmd` before treating a merge as done, and diff the fork against
+`docs/MAINTAINING.md` § "Still open" — that is where a merge usually contradicts
+the rest of the repository.
 
 ## Step 4 — Verification commands
 
@@ -103,17 +142,30 @@ verified if you skipped its command.
 
 | You changed | Run | Expected |
 | --- | --- | --- |
-| Anything in `BrowserForWP.Crypto/` | `node tools/gen-vectors.mjs` | `52 assertions, 0 failure(s)` |
+| Anything in `BrowserForWP.Crypto/` | `node tools/gen-vectors.mjs` | `53 assertions, 0 failure(s)` |
 | `X25519.vb` (or its prototype) | `node tools/proto/w25519.mjs` | `18 checks, 0 failure(s)` |
 | Anything in `BrowserForWP.Net/Tls13/` | `node tools/proto/tls13.mjs example.com` | `31 checks, 0 failure(s)` |
+| `PinStore.vb` / pin comparison | `node tools/proto/pinstore.mjs` | `0 failure(s)` |
 | Test vectors themselves | `node tools/gen-vectors.mjs` | every line prefixed `✓`, exit code 0 |
+| The vector emitter itself | `node tools/gen-vectors.mjs` | `emitted VB braces balanced`, else it refuses to write, exit code 1 |
+| `BrowserForWP.Core/` logic | `node tools/proto/core-logic.mjs` | `core-logic checks, 0 failure(s)` (53 assertions) |
+| UA table / settings | `node tools/proto/useragents.mjs` | `0 failure(s)` |
+| Tracker blocklist | `node tools/proto/trackerblock.mjs` | `0 failure(s)` |
+| Lite defaults / caps / resources | `node tools/proto/lightweight.mjs` | `0 failure(s)` |
+| Shim delivery / redirect rules | `node tools/proto/modern-sites.mjs` | `0 failure(s)` |
+| Picker/tab re-entrancy, sln registration | `node tools/proto/shell-guards.mjs` | `0 failure(s)` |
 | `BrowserForWP.Polyfill/compat.js` | `node tools/check-polyfill.mjs` | `is valid ES5` |
 | Any `.vb`, `.vbproj`, `.xaml` or `.resw` | `node tools/check-vb.mjs` | `0 finding(s)`, exit code 0 |
 | `BrowserForWP/Assets/**` | `python3 tools/make_logo.py` | one line per generated PNG, exit code 0 |
-| UI / XAML / VB app code | Build in the guest: `tools\vm-build.cmd /t:Rebuild` | `BUILD_EXIT=0`, no `BC` errors |
+| UI / XAML / VB app code | Build in the guest: `tools\vm-build.cmd /t:Rebuild` | `BUILD_EXIT=0`, no `BC` errors; only the two deliberate `ResourceLoader` warnings |
 | Unexplained build diagnostics | `RUNS=4 bash tools/wmc9999-probe.sh` | `distinct XBF hash pairs across 12 runs: 1` |
-| `BrowserForWP.Core/` logic | No automated harness — build, then verify by hand. See `docs/MAINTAINING.md` § "Where the tests actually are". | honest report, not a green tick |
 | TLS / DoH / sockets | Deploy to handset, run **Diagnostics → TLS probe** | reports negotiated `TLS1.3` |
+
+The two VB test projects under `tests/` are compiled by the guest build but
+**nothing executes them** — an ARM class library cannot run on the desktop and
+there is no handset or emulator. `node tools/proto/core-logic.mjs` is the
+executable half of `CoreLogicTests.vb`; keep the two in step. Never report the
+`tests/` projects as "tests passing".
 
 `node tools/gen-vectors.mjs` is the fastest real signal available off-Windows:
 it recomputes the algorithms from the RFCs and aborts on any mismatch. If you
@@ -149,17 +201,26 @@ Always run it after a completed task. If there is no upstream:
 ```
 BrowserForWP.sln              ← open this in Visual Studio 2013+
 BrowserForWP/                 ← the WP8.1 app: XAML UI, assets, UI strings
-BrowserForWP.Core/            ← engine abstraction, tabs, history, address bar
-BrowserForWP.Net/             ← TLS 1.3, DoH, HTTP client
+  Diagnostics/TlsProbeRunner.vb  ← app-layer glue: Net's TLS 1.3 stack → Settings UI
+BrowserForWP.Core/            ← engine abstraction, tabs, history, address bar,
+                                 settings/history/favourites stores, reading and
+                                 night modes, tracker blocklist, lite redirects
+BrowserForWP.Net/             ← TLS 1.3, DoH, HTTP client, certificate pin store
 BrowserForWP.Crypto/          ← HKDF, X25519, AES-GCM (no ChaCha: one suite, see below)
 BrowserForWP.Localization/    ← language resolution + string lookup
-BrowserForWP.Polyfill/        ← compat.js, packaged but NOT injected (see below)
+BrowserForWP.Polyfill/        ← compat.js, packaged AND injected at DOMContentLoaded
+                                 and again on navigation completed
+tests/*.Tests/                ← VB logic checks; compiled by the guest, NOT executed
 docs/ARCHITECTURE.md          ← design + the platform laws
 docs/MAINTAINING.md           ← build/run/extend recipes
-tools/gen-vectors.mjs         ← crypto verification (runs anywhere)
-tools/proto/*.mjs             ← the runnable prototypes for X25519 and TLS 1.3
+tools/gen-vectors.mjs         ← crypto verification + the VB vector emitter
+tools/proto/*.mjs             ← runnable prototypes and logic mirrors
+                                 (w25519, tls13, core-logic, pinstore, useragents,
+                                 trackerblock, lightweight, modern-sites,
+                                 shell-guards)
 tools/make_logo.py            ← regenerates every image asset
-tools/check-vb.mjs            ← 12 categories of static VB/XAML/project checks
+tools/check-vb.mjs            ← 12 categories / 50 check groups of static
+                                 VB/XAML/project/resw checks
 tools/check-polyfill.mjs      ← ES5 validity of the shim
 tools/vm-build.cmd            ← the real build, run inside the Windows guest
 tools/wmc9999-probe.sh        ← characterises the WMC9999 diagnostic + XAML drift
@@ -176,10 +237,10 @@ Worked example: *add a "desktop site" toggle.*
 1. **Plan.** `docs/superpowers/plans/2026-09-28-desktop-site-toggle.md`.
 2. **Decide the layer.** This is browser state + UI, so it lives in
    `BrowserForWP.Core` and `BrowserForWP/`, and touches neither crypto nor TLS.
-3. **Decide how this change can be verified, and be specific.** There is no VB
-   test project in this repository — see `docs/MAINTAINING.md` § "Where the
-   tests actually are" — so "add a unit test" is not available to you. Pick one
-   of these two, and write down which:
+3. **Decide how this change can be verified, and be specific.** The `tests/`
+   projects are compiled by the guest build but nothing runs them, so "add a unit
+   test" is still not an executable option — see `docs/MAINTAINING.md` § "Where
+   the tests actually are". Pick one of these two, and write down which:
 
    - **The logic is pure and has no WinRT dependency** (like
      `AddressNormalizer`, or a user-agent table). Extract it into
@@ -197,8 +258,8 @@ Worked example: *add a "desktop site" toggle.*
    function that means the Node script, and it must fail first:
 
    ```bash
-   node tools/proto/desktop-mode.mjs
-   # Expected: FAIL — no such export: effectiveUserAgent
+   node tools/proto/useragents.mjs
+   # Expected BEFORE the implementation: FAIL — no such function: EffectiveUserAgent
    ```
 
    For UI work it means writing the manual verification steps down *now*, while
@@ -206,20 +267,27 @@ Worked example: *add a "desktop site" toggle.*
    to check against.
 
    **Superseded step.** This walkthrough used to say: write a `<TestMethod>` into
-   `tests/BrowserForWP.Core.Tests/` — a project that was **not created** — then
-   run it and watch it fail. The path does not exist. Ignore any reference to it
-   in the example below; the two options above are what is actually available.
-5. **Implement the minimum.** Add the property and the lookup:
+   `tests/BrowserForWP.Core.Tests/`, then run it and watch it fail. That project
+   now exists and compiles, but no runner executes it off-device, so watching it
+   fail is still impossible. Mirror the logic in `tools/proto/` instead — exactly
+   what `core-logic.mjs` does for `CoreLogicTests.vb` — and keep the two in step.
+5. **Implement the minimum.** This feature has since shipped, so the real code is
+   the reference: the UA strings live in
+   `BrowserForWP.Core/Browser/UserAgents.vb` as constants plus a pure
+   `EffectiveUserAgent(desktopMode As Boolean)`, and `BrowserSession` delegates:
 
    ```vb
    Public Property DesktopMode As Boolean = False
 
    Public ReadOnly Property EffectiveUserAgent As String
        Get
-           Return If(DesktopMode, UserAgents.DesktopWindows, UserAgents.MobileDefault)
+           Return UserAgents.EffectiveUserAgent(DesktopMode)
        End Get
    End Property
    ```
+
+   Keep the lookup in the pure class so the Node mirror can call it; a `If`
+   inline in `BrowserSession` would put it out of `useragents.mjs`'s reach.
 
 6. **Re-run the check from step 4.** Expected: it passes now — the Node script
    for a pure function, or the guest build plus the manual handset steps for UI
@@ -297,12 +365,20 @@ Same loop, but the diagnosis comes first.
 - Asserting that something "cannot be built" or "is not supported" without having
   tried it. This repository has already paid for that mistake once: the README
   claimed the ARM64 guest could not build, for three rounds, and it can.
-- Describing a component as a shipped feature when nothing calls it. Two exist
-  right now, and both are catalogued in `docs/MAINTAINING.md` § "Still open":
-  `compat.js` is packaged but never injected, and `Tls13Client` / `HttpClient13` /
-  `DohResolver` compile into the package while the `WebView` does all navigation
-  through Schannel. Before listing anything as a feature, `grep` for a caller.
-  Compiled is not reachable; reachable is not verified on a handset.
+- Describing a component as a shipped feature when nothing calls it. Before
+  listing anything as a feature, `grep` for a caller. The live catalogue is
+  `docs/MAINTAINING.md` § "Still open": `Tls13Client` / `HttpClient13` /
+  `DohResolver` are reachable only through **Diagnostics → TLS probe**, never
+  through a page load, because the `WebView` navigates via Schannel; and both
+  `tests/` projects compile while no runner executes them. Compiled is not
+  reachable; reachable is not verified on a handset.
+- Adding a project to `BrowserForWP.sln` without the matching
+  `Configuration|Platform` groups in its `.vbproj` (see the fifth constraint).
+- Reporting the `tests/` projects as passing, or claiming `BrowserForWP.Core` is
+  covered because they compile. `node tools/proto/core-logic.mjs` is what runs.
+- Implying the `WebView`'s own traffic is pinned, or that it ever uses TLS 1.3.
+  Pins apply to the app's transport; the page load goes through Schannel at
+  TLS 1.2 max.
 
 ## The loop — do all five steps, in order, every time
 
@@ -350,10 +426,21 @@ Three things about that command, all of which cost time to learn:
   `La chiave specificata non era presente nel dizionario` is "the given key was
   not present in the dictionary". Grep for `error BC` / `error MSB` / `WMC`
   rather than reading the prose.
-- **`WMC9999` is intermittent noise.** It appears in some solution builds and not
-  others, is non-fatal, never changes the exit code, and does not change the
-  compiled `.xbf` (verified byte-identical across rebuilds). Do not edit source
-  to chase it. See `docs/MAINTAINING.md`.
+- **`WMC9999` is allow-listed known noise, and it is deterministic here.** It
+  appeared in **12 of 12** measured builds under `vm-build.cmd`, with
+  byte-identical `App.xbf` and `MainPage.xbf` across all of them — asserted, not
+  assumed, by `tools/wmc9999-probe.sh`, which exits non-zero if the compiled XAML
+  ever varies. It is non-fatal and never changes the exit code. An earlier
+  revision of this file called it "intermittent"; the measurement says otherwise,
+  and the earlier zeros were `obj` state. Do not edit source to chase it.
+- **Count warnings from `/t:Rebuild`, never from an incremental build.** The
+  incremental path sees unchanged projects as up to date and skips their compile
+  entirely, so it produces a *cleaner* log than a clean build does. This is not
+  hypothetical: an incremental run reported "Warnings: none" while
+  `BrowserForWP.Localization` still had two `BC40000`s that a rebuild shows. Two
+  other `BC40000`s were removed in Round 5 — `WebView.NavigationFailed` and
+  `DataPackage.SetUri` — and the only warnings that should remain are the two
+  deliberate `ResourceLoader` ones documented in `docs/MAINTAINING.md`.
 
 A previous revision of this section claimed the ARM64 guest "cannot host this
 build" and that a real build needs an x64 host. **That was wrong.** It was

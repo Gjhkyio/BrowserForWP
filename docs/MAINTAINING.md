@@ -35,7 +35,9 @@ desktop .NET.
 Run these before committing. They are cheap and each covers a different layer.
 
 ```bash
-# Crypto + TLS 1.3 key schedule. Runs anywhere. Must print "52 assertions, 0 failure(s)".
+# Crypto + TLS 1.3 key schedule. Runs anywhere. Must print "53 assertions, 0 failure(s)".
+# The 53rd asserts brace balance on the VB it emits: an empty RFC 5869 case once
+# produced an unterminated initializer and broke the test project with BC30201.
 node tools/gen-vectors.mjs
 
 # Verify only, writing nothing. Useful in CI.
@@ -55,6 +57,19 @@ node tools/proto/tls13.mjs example.com
 node tools/proto/tls13.mjs www.google.com
 node tools/proto/tls13.mjs cloudflare.com
 
+# Core logic. Must print "core-logic checks, 0 failure(s)". This is a
+# transliteration of tests/BrowserForWP.Core.Tests/CoreLogicTests.vb, and it is
+# the only way those assertions execute at all off-device. Keep the two in step.
+node tools/proto/core-logic.mjs
+
+# The shell and delivery guards that arrived with the merged browser shell.
+node tools/proto/shell-guards.mjs    # picker/tab re-entrancy, completed URL, sln registration
+node tools/proto/trackerblock.mjs    # host blocklist matching
+node tools/proto/pinstore.mjs        # pin normalisation and comparison
+node tools/proto/useragents.mjs      # UA table and search-URL escaping
+node tools/proto/lightweight.mjs     # lite defaults, caps, resource keys
+node tools/proto/modern-sites.mjs    # shim markers, redirect rules, delivery wiring
+
 # Confirm the polyfill shim is valid ES5 (comment-aware, so it does not
 # false-positive on backticks inside comments).
 node tools/check-polyfill.mjs
@@ -72,8 +87,8 @@ python3 tools/make_logo.py
 
 Those vectors also produce `tests/BrowserForWP.Crypto.Tests/Vectors.generated.vb`.
 That file is **generated** — never edit it by hand; regenerate it with
-`node tools/gen-vectors.mjs`. The MSTest project it was written for was
-**not created**, so nothing currently asserts it.
+`node tools/gen-vectors.mjs`. It is compiled by the guest build, but nothing
+executes the project that contains it.
 
 See "Where the tests actually are" below before assuming those vectors are being
 checked by a VB test run.
@@ -430,31 +445,109 @@ level, to test whether running the toolchain under Arm64 emulation is the trigge
 `tools/vm-build.cmd` allow-lists this diagnostic **by name** and fails the build
 on every other `error BC` / `error MSB` / `error APPX` line.
 
+### Round 5 — the merged fork is reviewed, and made to build
+
+A second repository was merged into `main` as PR #2 (branch `Gjhkyio/main`, 20
+commits, 42 files). It closes the three gaps Round 4 left open and adds the
+browser shell: polyfill injection, a TLS probe runner, a pin store, tabs, find,
+reading and night modes, tracker blocking, lite redirects, persisted settings,
+history and favourites, and two VB test projects.
+
+It was merged **without ever running the guest build.** The first guest build
+after the merge failed with four distinct defects. All four are fixed, and each
+one is a family worth recognising again:
+
+1. **A profile gap in `List(Of T)`.** `HistoryStore.List()` called
+   `_entries.AsReadOnly()`. `ReadOnlyCollection(Of T)` is not part of the
+   ".NET for Windows Store apps" profile, so this is `BC30456` — the same shape
+   as the `SHA256` / `Encoding.ASCII` gaps above, and `tools/check-vb.mjs`
+   cannot see it. Replaced with the profile-safe copy,
+   `New List(Of HistoryEntry)(_entries)`.
+2. **A solution platform mapping with no matching conditional group.** The tests
+   were added to `BrowserForWP.sln` with `Debug|ARM.Build.0 = Debug|ARM`, but
+   their `.vbproj` files only defined `Debug|AnyCPU`. A solution build for ARM
+   then fails inside `Microsoft.Common.CurrentVersion.targets` with "The
+   OutputPath property is not set for project …" — an error that names the
+   *pair*, never the missing `PropertyGroup`. Both test projects now carry the
+   same six configurations (`AnyCPU`/`ARM`/`x86` × Debug/Release) as every other
+   library here.
+3. **An emitter that only worked for non-empty data.** `tools/gen-vectors.mjs`
+   wrote `New Byte() { _` with **no closing brace** for a zero-length vector.
+   RFC 5869 case 3 has an empty salt *and* an empty info, so the generated
+   `Vectors.generated.vb` contained two unterminated initializers that swallowed
+   the declarations after them: `BC30201` in the test project. The generator now
+   has an explicit empty case **and** asserts brace balance on the emitted VB,
+   refusing to write the file when it is unbalanced. Verified by negative
+   control: the pre-fix file has 57 `{` and 55 `}`.
+4. **Deprecated WinRT APIs.** `WebView.NavigationFailed` and
+   `DataPackage.SetUri` both raise `BC40000` here. Failure is now handled through
+   `NavigationCompleted`'s `IsSuccess` / `WebErrorStatus`, which carry the reason
+   the deprecated event does not, and the share path uses `SetWebLink`. Both of
+   those warnings are gone; the only warnings left are the two deliberate,
+   already-documented `ResourceLoader` ones above.
+
+   **Count warnings from a rebuild, never from an incremental build.** After the
+   first fix round this build reported "Warnings: none" — and that was wrong, or
+   rather it was measured against the wrong thing: an incremental build reuses the
+   cached `BrowserForWP.Localization` DLL and never recompiles `Localizer.vb`, so
+   it hides that project's two warnings. `tools\vm-build.cmd /t:Rebuild` shows
+   them. A cleaner-looking log is not a cleaner tree.
+
+Also found and fixed while reviewing, none of which a compiler could see:
+
+- Both test projects **compiled but nothing executed them.** See "Where the
+  tests actually are".
+- The Settings overlay was titled **"Diagnostics"**: the two heading keys were
+  swapped with the engine label. `DiagnosticsTitle` now reads "Diagnostics", the
+  engine block is labelled "Rendering engine", and the previously hardcoded
+  English `"compatibility layer active"` / `"native"` are catalogue keys.
+- The engine status was prefixed with `DiagnosticsProbe` — the TLS probe's own
+  label, "Run TLS probe" — producing "Run TLS probe: native".
+  `DiagnosticsProbe` was a duplicate of `TlsProbeRun` and is deleted.
+- The security-details dialog embedded English `"(TLS 1.2 max, WebView). UA="`
+  in code. It is now the `SecurityWebViewCeiling` key in both languages.
+- `ErrorNoConnection`, `Loading`, `LoadComplete`, `PinMismatch` and
+  `SecurityTls13` had no consumer. All five are wired (failure reason, status
+  line, pin verdict, probe headline). **61 resource keys, 0 unused, en/it parity
+  intact** — checked with a real XML parser, not a tag count.
+- `TlsProbeRunner` carried a second copy of the pin comparison; it now calls
+  `CertificateValidator.VerifyPin`, so there is one implementation.
+  `TlsProbeResult` gained `PinMismatch` so the UI shows the localized sentence
+  instead of the English `pin-MISMATCH` token buried in the detail line.
+
+**Unchanged on purpose:** `AddressNormalizer` refuses `localhost:8080`, because a
+colon before any slash is read as the scheme `localhost`. The comment above that
+branch promises localhost support; in practice only a `localhost` with *no* port
+navigates. Left as-is and recorded: loopback is unreachable from an AppContainer
+anyway, and that class is security-relevant parsing a merge review should not
+rewrite without a device test to justify it.
+
 ### Still open
 
-1. **The polyfill is packaged but never injected.** `compat.js` now ships in the
-   app, but nothing reads it: `TridentEngine` has no injection code, only
-   `InvokeScriptAsync`. The README claims the polyfill is "injected into every
-   document before scripts run" — **that is not yet true.** Either implement
-   injection on navigation (read from the app package, then
-   `InvokeScriptAsync("eval", ...)` before the document scripts run) or soften the
-   claim. Do not leave the README asserting a behaviour the code does not have.
+Items 1–3 of the previous revision are **closed** by Round 5: injection, the
+probe and the pin store all exist and are wired. What remains is this.
 
-2. **The TLS 1.3 stack is compiled and shipped, but unreachable from the app.**
-   `BrowserForWP.Net` is referenced by the app project and builds, so
-   `Tls13Client`, `HttpClient13` and `DohResolver` all end up in the package — but
-   **nothing calls any of them.** The `WebView` performs every navigation through
-   Schannel, so the TLS 1.3 path has no entry point in the UI. Task 15 Step 2 of
-   `2026-09-28-browserforwp.md` specifies `Diagnostics/TlsProbe.vb`, the component
-   that would have connected them; that file **does not exist**. Until it does,
-   treat "the app speaks TLS 1.3" as describing the library, not the browser.
-
-3. **Certificate pinning is advertised but not implemented.** `README.md` lists
-   "user-managed per-site pins with explicit, reversible override" under features.
-   There is no pinning code anywhere: no pin store, no pin comparison in
-   `Tls13/CertificateValidator.vb`, and no resource keys for a UI. The same
-   question as item 1 applies — implement it or soften the claim. Note that
-   `CertificateValidator` validates the chain only; that is not pinning.
+1. **The VB test projects compile, but nothing executes them.** Both are in
+   `BrowserForWP.sln` and the guest build produces their DLLs — real progress on
+   the Round 4 gap — but no runner invokes `RunAll()`. A WP8.1 ARM class library
+   cannot run on the desktop, and there is no handset and no emulator, so
+   **"compiled" is not "tested"**. The assertions now run off-device through
+   `tools/proto/core-logic.mjs` (53 assertions), a transliteration of
+   `CoreLogicTests.vb` that must be kept in step with it. That mirror exists
+   because the VB suite's first defect was invisible without execution: an
+   assertion naming the heavy `duckduckgo.com` search URL that the lite-first
+   default had replaced.
+2. **Pinning is enforced only on the app's own transport.** `PinStore` and
+   `CertificateValidator.VerifyPin` are real and wired, so a stored pin is checked
+   against the leaf SPKI on every probe and a mismatch is surfaced. They **cannot**
+   apply to browsing: the `WebView` rides Schannel, whose validation this app
+   cannot hook. A pin therefore protects the app's TLS 1.3 path, never the pages
+   you visit. `README.md` says "certificate pinning for the app's transport
+   layer", which is accurate — do not let it drift into implying that the
+   browser's own traffic is pinned.
+3. **Never run on a handset.** XAML layout, `WebView` behaviour,
+   `DOMContentLoaded` injection, reading-mode fallback, lite redirects, night mode
+   and 2014-hardware performance are all unverified. Compiling is not running.
 
 ### Error taxonomy
 
@@ -477,6 +570,27 @@ Families actually observed, in order of how misleading they are:
   ".NET for Windows Store apps" profile — use `WinRtCrypto`.
   `Encoding.ASCII` and `RegexOptions.Compiled` are absent too.
   `tools/check-vb.mjs` now flags all three.
+- **More profile gaps, found in Round 5.** `List(Of T).AsReadOnly()` is not in the
+  profile either — `ReadOnlyCollection(Of T)` is missing, so the call is
+  `BC30456` rather than a silent degradation. Check any BCL helper against the
+  profile surface before using it; `tools/check-vb.mjs` knows only the three
+  above.
+- **A `Configuration|Platform` pair with no `PropertyGroup`.** Adding a project to
+  the solution with `Debug|ARM.Build.0 = Debug|ARM` while its `.vbproj` defines
+  only `Debug|AnyCPU` fails the entire build with "The OutputPath property is not
+  set for project … Configuration='Debug' Platform='ARM'". The message names the
+  pair, never the missing group. Every library in this repo defines all six.
+- **Generated code that was only ever tested on non-empty data.**
+  `gen-vectors.mjs` emitted `New Byte() { _` with no closing brace for a
+  zero-length vector, so the generated file failed to compile (`BC30201`) for
+  RFC 5869 case 3 — a case with an empty salt *and* an empty info. Checked inputs
+  are not a checked emitter: the generator now asserts brace balance on its own
+  output before writing it.
+- **Deprecated WinRT APIs.** `WebView.NavigationFailed` and
+  `DataPackage.SetUri` are `BC40000` on this OS. Prefer `NavigationCompleted`'s
+  `IsSuccess` / `WebErrorStatus` (they carry the reason, the deprecated event does
+  not) and `DataPackage.SetWebLink`. Treat a new `BC40000` as a design question
+  rather than as noise to allow-list.
 - **XML comment hazards.** A `--` run inside a `<!-- -->` comment makes MSBuild
   refuse to load a project (`MSB4025`), which surfaces from a solution build as
   the unrelated-looking `MSB4078` "project file is not supported by MSBuild". An
@@ -504,35 +618,48 @@ Then update the skill if any tool, command, file layout or constraint changed.
 
 ## Where the tests actually are
 
-**There are no VB unit-test projects.** `2026-09-28-browserforwp.md` specified
-`tests/BrowserForWP.Crypto.Tests/` and `tests/BrowserForWP.Core.Tests/`, both
-**not created**, as MSTest projects with `<TestMethod>` cases. What exists is:
+Both VB test projects from `2026-09-28-browserforwp.md` now **exist and compile**:
+`tests/BrowserForWP.Core.Tests/` and `tests/BrowserForWP.Crypto.Tests/`, both
+registered in `BrowserForWP.sln` (Debug configurations only) and built by
+`tools/vm-build.cmd`. They are deliberately **not MSTest projects** — they hold a
+plain `Public Shared Function RunAll() As Integer` that throws on the first failed
+check, so they need no test framework the guest might not have.
+
+What is and is not covered:
 
 | Path | What it is | Consumed by |
 | --- | --- | --- |
 | `tools/gen-vectors.mjs`, `tools/proto/*.mjs` | The executable prototypes. `gen-vectors.mjs` recomputes HKDF, X25519 and AES-GCM and asserts RFC 5869 / 7748 / 8448 and NIST CAVS vectors; `tls13.mjs` completes real handshakes against live servers. | `node`, on any machine. **This is the real crypto verification.** |
-| `tests/BrowserForWP.Crypto.Tests/Vectors.generated.vb` | Generated VB constants from those same vectors. The project around it is **not created**; this file has no consumer. | — |
-| `tools/check-vb.mjs` | 12 categories of static check over every `.vb`, `.vbproj`, `.xaml` and `.resw`. | `node`, on any machine. |
-| `tools/vm-build.cmd` | The real compiler. | The Windows guest. |
+| `tests/BrowserForWP.Crypto.Tests/` (`Vectors.generated.vb` + `VectorsSmokeTests.vb`) | Generated VB constants from those same vectors, plus length/shape checks. | **Compiled by the guest build; never executed.** |
+| `tests/BrowserForWP.Core.Tests/CoreLogicTests.vb` | Address normalisation, tab state, session/UA, settings, history, favourites, pin normalisation, hostname wildcards, language matching. | **Compiled by the guest build; never executed.** |
+| `tools/proto/core-logic.mjs` | A transliteration of `CoreLogicTests.vb`. 53 assertions, exit 1 on failure. | `node`, on any machine. **This is what actually runs those assertions.** |
+| `tools/check-vb.mjs` | 12 categories / 50 check groups over every `.vb`, `.vbproj`, `.xaml` and `.resw`. | `node`, on any machine. |
+| `tools/vm-build.cmd` | The real compiler, and the arbiter of pass/fail. | The Windows guest. |
 | `tools/wmc9999-probe.sh` | Build-diagnostic characterisation and XAML output invariance. | `bash`, on the host. |
 
-**This is a real gap, not a documentation problem.** The crypto algorithms are
-covered better off-device than a VB test project would have covered them, because
-the prototypes exercise the *same algorithm* against published vectors and live
-servers — but `BrowserForWP.Core` (address normalisation, history, tab state) and
-the UI have **no automated tests at all**, and the plan's TDD steps for them were
-never honoured. Adding a WP8.1 Unit Test Library and running it in the guest is
-recorded as follow-up work, not attempted here.
+**"Compiled" is still not "tested", and the distinction is not academic.**
+`CoreLogicTests.vb` shipped an assertion naming the heavy `duckduckgo.com` search
+URL that the lite-first default had replaced. It compiled cleanly, so nothing
+complained; only running it would have. A WP8.1 ARM class library cannot run on
+the desktop and there is no handset or emulator, which is exactly why
+`tools/proto/core-logic.mjs` exists: it is the executable half of that suite.
 
-Until that exists, do not claim test coverage for `BrowserForWP.Core`. Verify it
-by building and by hand on a handset, and say so.
+**Keep the two in step.** If `CoreLogicTests.vb` gains a case, `core-logic.mjs`
+must gain it too, and vice versa. A mirror that drifts is worse than no mirror,
+because it reports green for behaviour the VB no longer has.
+
+Crypto is the one layer covered better off-device than a VB project could cover
+it, because the prototypes exercise the *same algorithm* against published RFC
+vectors and live servers. Do not claim UI or XAML coverage: neither exists.
 
 ## Release checklist
 
-- [ ] `node tools/gen-vectors.mjs` → `52 assertions, 0 failure(s)`
+- [ ] `node tools/gen-vectors.mjs` → `53 assertions, 0 failure(s)`
 - [ ] `python3 tools/make_logo.py` → 12 PNGs, all `*.scale-100` / `*.scale-240`, no git diff
 - [ ] Polyfill ES5 check passes
-- [ ] `tools\vm-build.cmd /t:Rebuild` in the guest → `BUILD_EXIT=0`, no `BC` errors
+- [ ] `node tools/proto/core-logic.mjs` → `core-logic checks, 0 failure(s)`
+- [ ] `tools\vm-build.cmd /t:Rebuild` in the guest → `BUILD_EXIT=0`, no `BC`
+      errors, no warnings
 - [ ] `node tools/proto/w25519.mjs` → `18 checks, 0 failure(s)`
 - [ ] `node tools/proto/tls13.mjs example.com` → `31 checks, 0 failure(s)`
 - [ ] `RUNS=4 bash tools/wmc9999-probe.sh` → `distinct XBF hash pairs across 12 runs: 1`

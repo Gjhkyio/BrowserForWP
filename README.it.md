@@ -59,8 +59,12 @@ trasporto e contenuto verranno con te.
   tradizionale, così un resolver locale obsoleto o dirottato non può rompere o
   redirigere la navigazione.
 - **Pinning dei certificati** — pin per sito gestiti dall'utente, con override
-  esplicito e reversibile.
-- **Bundle di compatibilità ES5** (`BrowseForWP.Polyfill/compat.js`) — scritto,
+  esplicito e reversibile (rimuovere il pin lo annulla). Il pin viene confrontato
+  con lo SPKI della foglia quando si connette il trasporto TLS 1.3 dell'app. Il
+  traffico della `WebView` passa da Schannel, la cui validazione l'app non può
+  intercettare: un pin protegge quindi il livello di trasporto, non le pagine che
+  visiti.
+- **Bundle di compatibilità ES5** (`BrowserForWP.Polyfill/compat.js`) — scritto,
   verificato ES5, incluso e iniettato a `DOMContentLoaded` e al completamento
   tramite `TridentEngine.InjectPolyfillAsync`. Alza il livello minimo; non può
   interpretare la sintassi ES6 né fornire `Proxy`/`Intl`/grid. Vedi
