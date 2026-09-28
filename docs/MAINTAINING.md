@@ -346,22 +346,70 @@ warning is a forward-compatibility note about a "TBD" future release that will
 never ship for WP8.1, and the alternative cannot be tested on a handset from here.
 A deliberate, documented trade-off.
 
-**`WMC9999` is intermittent and not fully explained.** It appears in most solution
-builds and not in others, with byte-identical sources; with
-`/p:BuildProjectReferences=false` it was absent once and present on a later
-identical run. What *is* established:
+**`WMC9999` is a diagnostic from the VS2013 XAML compiler, and it is harmless.**
+It is not a defect in this codebase and it must not be chased with source edits.
 
-- it is emitted from the XAML compiler's second pass (`XamlPreCompile`);
-- it never changes the exit code, and never prevents `App.xbf`, `MainPage.xbf`,
-  `BrowserForWP.exe` or the packages from being produced;
-- `App.xbf` and `MainPage.xbf` are **byte-identical** across every rebuild that
-  was hashed (`b7af0673a52d230302275b6c60fa2a64`, `817580f71c93802ca8818c328074ea85`);
-- four hypotheses were tested and eliminated: the `.resw` `PRIResource` items,
-  project-level PRI generation (`/p:GenerateProjectPriFile=false`),
-  `BuildingInsideVisualStudio`, and the Release configuration.
+```
+Microsoft.Windows.UI.Xaml.Common.targets(327,9): Xaml Internal Error error
+WMC9999: La chiave specificata non era presente nel dizionario.
+```
 
-Treat it as noise from the VS2013 XAML toolchain, not as a signal about the code.
-Do not "fix" source to chase it.
+*(the given key was not present in the dictionary)*
+
+Measure it with `tools/wmc9999-probe.sh`, which runs three build modes `RUNS`
+times each and hashes the compiled XAML from every run:
+
+```
+RUNS=4 bash tools/wmc9999-probe.sh
+```
+
+**Measured result (12 runs):** `WMC9999=1` in **12 of 12** runs — 4/4
+`sln /t:Rebuild`, 4/4 app-project `/t:Rebuild`, and 4/4 app-project incremental
+builds. `distinct XBF hash pairs across 12 runs: 1`. The probe exits non-zero if
+that count is ever anything but 1.
+
+So within a single host session the diagnostic is **deterministic**, not
+intermittent, and the compiled XAML is invariant. Both artefacts agree every
+time:
+
+```
+App.xbf      = b7af0673a52d230302275b6c60fa2a64
+MainPage.xbf = 817580f71c93802ca8818c328074ea85
+```
+
+Earlier in the same day, isolated ad-hoc builds reported `WMC9999=0` three times
+with sources that are not distinguishable from today's, including one solution
+build with `/p:BuildProjectReferences=false`. Those zeros are **not reproduced**
+by the matrix above. The honest reading is that the behaviour is stable *within*
+a session and differed *between* sessions — per-session toolchain state, not a
+property of the inputs. Treat the "intermittent" characterisation as superseded
+by this measurement.
+
+An attempt to isolate it to the app's `obj` directory was inconclusive: those
+files are owned by the guest's MSBuild user, so they cannot be deleted from the
+macOS host, and `/t:Rebuild` already runs a Clean. What is established without
+that experiment is enough for the allow-list, because the invariance of the
+`.xbf` is checked rather than argued.
+
+**Five hypotheses were tested and eliminated:**
+
+| Hypotheses tested | Result |
+| --- | --- |
+| The `.resw` `PRIResource` items — set `Condition="false"` | `WMC9999` still present. Not PRI resources. |
+| Project-level PRI generation — `/p:GenerateProjectPriFile=false` | Still present. |
+| `/p:BuildingInsideVisualStudio=true` | Still present. |
+| The `Release` configuration (vs `Debug`) | Still present. |
+| The app's unused `xmlns:local` / `mc:Ignorable="d"` declarations, on the theory that the XAML compiler's type dictionary collides because all four referenced assemblies also declare types under `BrowserForWP` | Still present, 3/3. |
+
+**If you are tempted to chase it anyway:** do not change source to do so. The
+diagnostic is emitted by a task that has already produced correct output, and the
+remaining leads are inside Microsoft's toolchain. The one experiment that would
+actually move this forward is a build on an x64 host at the same VS2013 update
+level, to test whether running the toolchain under Arm64 emulation is the trigger
+— that is an untested hypothesis, and it is recorded as one.
+
+`tools/vm-build.cmd` allow-lists this diagnostic **by name** and fails the build
+on every other `error BC` / `error MSB` / `error APPX` line.
 
 ### Still open
 
