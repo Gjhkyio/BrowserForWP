@@ -628,6 +628,33 @@ tap is how a handset turns that from an argument into a measurement. Until
 someone runs it, the probe is the instrument and this section is the claim — keep
 the two distinct, and record the measured `documentMode` here when it happens.
 
+### Deferred from the native-engine phase
+
+Recorded rather than fixed. None of these is a broken promise; each is a place
+where the code is more confident than the corpus of checks behind it.
+
+1. **The pipeline has never seen a real page.** Tokens, tree, cascade and boxes
+   have only ever run against the prototypes' own fixtures. The first real
+   document is the real test, and no check in this repository predicts it.
+   Likewise, `NetDocumentFetcher`'s redirect loop and its latin1 branch have
+   never run against a live server or a genuine latin1 page.
+2. **`line-height` is inherited as a resolved pixel value**, not as the
+   multiplier CSS inherits, so an element whose font-size differs from its
+   parent's keeps the parent's line box height. Invisible until there is layout.
+3. **An `http://` URL is accepted and then speaks TLS to port 80.** It fails, but
+   with a handshake error rather than "unsupported scheme".
+4. **A fresh `DohResolver` per fetch**, so its TTL cache never spans more than one
+   request. Correct and wasteful.
+5. **Error details are English tokens beside localized copy**, so a failure reads
+   "Recupero non riuscito. HTTP 404". The fix is an error code plus resource keys,
+   which is a design change rather than a patch.
+6. **`<pre>` loses its formatting**, because whitespace collapses everywhere. The
+   declared subset says so, but the user-agent sheet gives `pre` a monospace font,
+   which promises the opposite.
+7. **`IeModeProbe` mutates the document it inspects** by appending a `meta` tag.
+   That is deliberate, it is the strongest form of the test, and it is reachable
+   only from a Diagnostics button — know that before calling it anywhere else.
+
 ### Error taxonomy
 
 The library project files are hand-authored. If one of them stops being
