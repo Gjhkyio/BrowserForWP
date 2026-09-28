@@ -28,6 +28,16 @@ exists for WinRT-ARM 8.1:
 `IBrowserEngine` exists — it makes the cap a configuration detail instead of an
 assumption baked into every call site.
 
+**That claim is true of behaviour and, since Round 8, false of construction.**
+There are now two implementations: the system `WebView`, and
+`BrowserForWP/Engine/NativeEngine.vb`, this repository's own renderer. What the
+shell *does* still branches only on `EngineCapabilities` — including whether the
+engine has a script host at all — but `MainPage` wires the two engines' events
+itself, so it knows both types at exactly one site. Putting the lifecycle on the
+interface would remove that, and it is deferred rather than done
+(`docs/MAINTAINING.md`, deferred item 11) so that the sentence above is not left
+standing on a claim the code no longer earns.
+
 ### Law 2 — The OS offers TLS 1.2 at most
 
 Schannel on WP8.1 negotiates TLS 1.0/1.1/1.2. There is no API to raise the
@@ -81,7 +91,9 @@ Where a third-party engine *is* obtainable, it is obtainable as a
 
 **Consequence:** on WP8.1 the only route to rendering that is not Trident is the
 one this repository took — our own tokenizer, cascade, layout and painter in
-managed code, without a JIT. On Windows 10 *desktop* a modern engine is a
+managed code, without a JIT. That engine exists as of Round 8 and is selectable
+in Settings; what it does and does not render is listed in the deferred items in
+`docs/MAINTAINING.md`. On Windows 10 *desktop* a modern engine is a
 different project on a different OS, and note that it is not reached by escaping
 anything: it is reached by targeting the platform where third-party engines were
 never sandboxed. Plainly: *"we could have Chromium"* is a statement about the

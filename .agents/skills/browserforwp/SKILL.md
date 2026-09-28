@@ -292,7 +292,10 @@ tools/proto/*.mjs             ← runnable prototypes and logic mirrors
 tools/make_logo.py            ← regenerates every image asset
 tools/proto/textmeasure.mjs   ← the measurer's arithmetic (referee)
 tools/proto/boxlayout.mjs     ← block/inline layout numbers (referee)
-tools/check-vb.mjs            ← 16 categories / 74 check groups of static
+tools/proto/engine-choice.mjs ← which engine renders, and when it may fall back
+BrowserForWP/Engine/NativeEngine.vb ← this repository's own engine, behind the
+                                 same IBrowserEngine seam as the WebView
+tools/check-vb.mjs            ← 16 categories / 75 check groups of static
                                  VB/XAML/project/resw/theme-key/flavour checks
 tools/check-polyfill.mjs      ← ES5 validity of the shim
 tools/wp81-theme-keys.sh      ← regenerates the phone's 523 theme-resource keys

@@ -695,6 +695,60 @@ tap is how a handset turns that from an argument into a measurement. Until
 someone runs it, the probe is the instrument and this section is the claim — keep
 the two distinct, and record the measured `documentMode` here when it happens.
 
+### Round 8 — the native engine becomes an engine you can pick
+
+Round 7 drew a page behind a Diagnostics button. This round made that reachable
+the way every other page is: Settings gains a rendering-engine choice
+(*Automatic*, *System WebView*, *BrowserForWP native*), and the
+320-pixel preview, its button and its resource key are gone. The native engine
+draws into `ContentHost`, so the address bar, the tab list, the history store and
+the hardware Back button drive it unchanged.
+
+- **`EngineChoice`** is the selection rule as pure Core logic: an explicit choice
+always wins over the probe, and an *absent* measurement never moves anything.
+That last row is the one that matters, and `tools/proto/engine-choice.mjs`
+refuses it exhaustively — the repository has already shipped one lie of that
+shape, when a probe that never ran was reported as "no missing web features
+detected".
+- **`NativeEngine`** implements the existing seam. `Source` returns one `Border`
+created once, because the shell takes that object at wire time and keeps it.
+It claims `SupportsTls13 = True`, which no other engine in this product may
+honestly claim, because the fetch goes through `BrowserForWP.Net` rather than
+Schannel.
+- **`EngineCapabilities.SupportsScripting` is new, and `NeedsPolyfillLayer`
+  stopped being `Not SupportsModernJavaScript`.** That expression was wrong for
+an engine with no script host: it would have answered `True` and had the shell
+inject `compat.js` into a document with no `window`. Three shapes, all asserted.
+- **The reader fallback and the engine fallback are alternatives now.** When a
+measurement says Trident cannot cope, rendering with our own engine beats
+injecting a reader, and doing both would fight over one document. The reader is
+still reachable from the Reading button.
+
+**Two corrections this round made to earlier documents.** The Phase-2 roadmap in
+`2026-09-29-native-engine-pipeline.md` said the automatic fallback should fire
+when `CompatibilityProbe.CouldRun` is `False`. That is the exact mistake
+`EngineChoice` exists to refuse, and the implemented rule is stricter: only a
+measurement that *ran* may move the engine. And `docs/ARCHITECTURE.md` claimed
+the engine seam makes the engine "a configuration detail instead of an assumption
+baked into every call site": that is still true of behaviour and newly false of
+construction, because the shell knows two engine types at one site. Both are now
+recorded where the claims are made.
+
+**The guest found what no checker could.** `ApplyLocalizedStrings` still set the
+`Content` of the button whose XAML had just been deleted — `BC30451`, reported
+against the page rather than against the handler. Four subsystems had to agree
+for this round to work (Core, the engine, the XAML and two resource files) and
+only the compiler checks that all four do.
+
+**Verified:** six configurations `BUILD_EXIT=0` with only the two deliberate
+`ResourceLoader` warnings; `engine-choice.mjs` 21/21; `boxtree.mjs` 48/48 (six of
+those are the transliterated `PageCss`, which moved out of `MainPage` this round);
+`core-logic.mjs` 62 assertions; `check-vb.mjs` 0 finding(s).
+**Not verified:** the on-device output. Nothing in this round has run on a
+handset either, and the engine picker itself has never been seen. The first handset
+session should record, in this section, what the automatic fallback actually does
+on a real broken page.
+
 ### Sandbox escape is closed
 
 "Let the app start sandboxed and step outside when a request arrives" was
@@ -771,6 +825,22 @@ where the code is more confident than the corpus of checks behind it.
 10. **A word wider than its line overflows instead of breaking.** Deliberate: a
     split URL is a lie about the text. It is also how a long unbroken token becomes
     a horizontal scrollbar.
+11. **The engine lifecycle is not on `IBrowserEngine`.** `NavigationStarting` and
+    `NavigationCompleted` are still re-raised from the `WebView` rather than
+the interface, so the shell wires whichever engine it built and therefore knows
+    two engine types at exactly one site. Behaviour still branches only on
+    `EngineCapabilities`; construction does not. Worth doing, and it is a bigger
+    diff across every call site than the user-visible feature it would unblock.
+12. **The native engine cannot be stopped.** `[Stop]` is a no-op because the fetch
+    is not cancellable through `IDocumentFetcher`. On this hardware a document
+    lays out fast enough to hide it; on a large page over a slow link it would not.
+13. **No per-tab page state in the native engine.** Switching tabs re-renders from
+    the URL, so scroll position, a reading-mode choice and anything else the page
+    had is lost. `BrowserSession` keeps URLs, not documents.
+14. **A rotation after a render does not re-lay-out.** The viewport width is read
+    once per render, so turning the phone leaves the page at the old width until
+    the next navigation. The system WebView handles this itself, which is why the
+    gap is only visible on the native engine.
 
 ### Error taxonomy
 
@@ -1037,7 +1107,7 @@ What is and is not covered:
 | `tools/proto/textmeasure.mjs` | The measurer's arithmetic, plus parity with the VB that implements it. | `node`, on any machine. |
 | `tools/proto/boxlayout.mjs` | Block widths and heights, line breaking, alignment. The referee for `BlockLayout.vb` / `InlineLayout.vb`. | `node`, on any machine. |
 | `tools/proto/engine-choice.mjs` | The `EngineChoice` decision table, plus the source contract around it: the constants by name, and the reasons as resource keys rather than sentences. | `node`, on any machine. |
-| `tools/check-vb.mjs` | 16 categories / 74 check groups over every `.vb`, `.vbproj`, `.xaml` and `.resw`, including every `{ThemeResource}` key, every project's flavour GUID, (group 15) every privileged API name and every manifest capability that would ask the platform for something it cannot grant, and (group 16) every API whose capability the manifest fails to declare. | `node`, on any machine. |
+| `tools/check-vb.mjs` | 16 categories / 75 check groups over every `.vb`, `.vbproj`, `.xaml` and `.resw`, including every `{ThemeResource}` key, every project's flavour GUID, (group 15) every privileged API name and every manifest capability that would ask the platform for something it cannot grant, and (group 16) every API whose capability the manifest fails to declare. | `node`, on any machine. |
 | `tools/wp81-theme-keys.sh` | Regenerates `tools/wp81-theme-keys.txt`, the 523 theme-resource keys Windows Phone 8.1 defines, read from the guest's design dictionaries. | `bash`, with the guest reachable. |
 | `tools/vm-build.cmd` | The real compiler, and the arbiter of pass/fail. | The Windows guest. |
 | `tools/wmc9999-probe.sh` | Build-diagnostic characterisation and XAML output invariance. | `bash`, on the host. |
