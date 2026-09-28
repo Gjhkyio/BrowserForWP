@@ -135,6 +135,17 @@ four levers that make re-configuring Trident impossible. Its ninth check — the
 measured `documentMode` from a real handset — cannot run here and is deliberately
 not asserted; record it in `MAINTAINING.md` when someone has a device.
 
+`sandbox-escape.mjs` is the same kind of object for Law 4, and it needed a
+different instrument because there is no probe for this one: nothing inside the
+container can measure a privilege it does not have. Its evidence is the
+**deployment-time** fact instead — it parses `Package.appxmanifest` and asserts
+that the declared capabilities are exactly `internetClientServer`, i.e. resource
+access and not process or memory privilege, and that neither `runFullTrust` nor
+`codeGeneration` (both Windows 10, both unavailable here) has quietly appeared. The
+rest of it asserts that `docs/ARCHITECTURE.md` Law 4 and `MAINTAINING.md` §
+"Sandbox escape is closed" still state the four levers. Run it before writing any
+sentence that contains "JIT", "escape the sandbox" or "full trust".
+
 **Fourth — a self-consistent TLS client proves nothing.** Sealing and opening your
 own records will round-trip any bug that is symmetric. `tools/proto/tls13.mjs`
 completes handshakes with real servers precisely so that field-order and
@@ -202,6 +213,7 @@ verified if you skipped its command.
 | `BlockLayout.vb` / `InlineLayout.vb` / `LayoutBox.vb`, or anything that positions a box | `node tools/proto/boxlayout.mjs` | `19/19 checks passed` |
 | `CompatibilityProbe.vb` / any probe verdict | `node tools/proto/probe-verdict.mjs` | `9/9 checks passed` |
 | Any claim about re-configuring Trident | `node tools/proto/ie-adapt.mjs` | `9/9 checks passed` |
+| Any claim about leaving the AppContainer, or about getting JIT memory | `node tools/proto/sandbox-escape.mjs` | `15/15 checks passed` |
 | `BrowserForWP.Polyfill/compat.js` | `node tools/check-polyfill.mjs` | `is valid ES5` |
 | Any `.vb`, `.vbproj`, `.xaml` or `.resw` | `node tools/check-vb.mjs` | `0 finding(s)`, exit code 0 |
 | A `{ThemeResource}` key in XAML | `node tools/check-vb.mjs` | `0 finding(s)`; group 9 checks every key against `tools/wp81-theme-keys.txt` |
@@ -271,8 +283,9 @@ tools/gen-vectors.mjs         ← crypto verification + the VB vector emitter
 tools/proto/*.mjs             ← runnable prototypes and logic mirrors
                                  (w25519, tls13, core-logic, pinstore, useragents,
                                  trackerblock, lightweight, modern-sites,
-                                 shell-guards, ie-adapt, probe-verdict,
-                                 fetch-rules, htmlparse, csscascade, boxtree)
+                                 shell-guards, ie-adapt, sandbox-escape,
+                                 probe-verdict, fetch-rules, htmlparse,
+                                 csscascade, boxtree)
 tools/make_logo.py            ← regenerates every image asset
 tools/proto/textmeasure.mjs   ← the measurer's arithmetic (referee)
 tools/proto/boxlayout.mjs     ← block/inline layout numbers (referee)

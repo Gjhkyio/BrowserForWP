@@ -1,10 +1,15 @@
 # BrowserForWP — Architecture
 
-## The three platform laws
+## The four platform laws
 
-Every design decision in this repository follows from three facts about
+Every design decision in this repository follows from four facts about
 Windows Phone 8.1. Each was verified, not assumed. If you are about to write
 code that contradicts one of them, stop — the platform will not honour it.
+
+Law 4 was added on 2026-09-28, after Law 1 was reached a third time by a
+different route ("escape the sandbox when a request arrives"). Plans written
+before that date say "the three platform laws" and are dated records, not
+errors.
 
 ### Law 1 — The rendering engine is Trident (IE11) and cannot be replaced
 
@@ -43,6 +48,44 @@ device.
 loopback and point the `WebView` at it — **does not work here**. That design was
 evaluated and rejected. Anyone proposing "let's just proxy it locally" is
 proposing something the OS will refuse.
+
+### Law 4 — An app cannot leave its AppContainer
+
+The sandbox is not a wall an application climbs at runtime. It is the identity of
+the process, fixed by whoever created it, and no version of Windows offers an
+operation called "leave the sandbox". So the shape *"the app starts sandboxed
+and steps outside when a request arrives"* is not a technique this platform
+blocks — it is a technique that does not exist anywhere.
+
+| Lever such a plan needs | Why it is absent |
+| --- | --- |
+| Stop being an AppContainer process | **No self-de-sandboxing API.** Container membership lives in the process token and is set by the parent at creation; nothing in WinRT changes it, and WP8.1's profile exposes no process creation at all. There is no JIT to unlock either: an AppContainer denies writable+executable pages, and the `NETFX_CORE` profile has no `Reflection.Emit`. |
+| Hand the work to a free helper process | **A child of an AppContainer process is created in the same container.** A helper that is not in the container has to be launched by a full-trust parent, which the app is not. |
+| Declare the privilege in the manifest | **Capabilities grant resources, never memory policy.** Privilege is declared at *package* time in `Package.appxmanifest`, reviewed at publish. There is no 8.1 capability meaning "may create executable pages"; this package declares `internetClientServer` and nothing else. |
+| Ask a full-trust service to do it | **Broker contracts exist to perform specified operations.** An `AppServiceConnection` does a defined job for an app; it does not hand over a DOM, a renderer or memory. Microsoft defines the operations, so an engine cannot be requested. |
+
+**This is also why an SDK update could not have delivered it.** The SDK decides
+what you compile against; the kernel and the AppContainer process policy decide
+what the process may do. A patched SDK can give you an API that links and dies at
+runtime, and the device's firmware is not ours to change.
+
+Where a third-party engine *is* obtainable, it is obtainable as a
+**deployment-time decision, not a request-time escape**:
+
+| Route to a third-party engine | Windows Phone 8.1 | Windows 10 desktop | Windows 10 Mobile |
+| --- | --- | --- | --- |
+| Leave the sandbox when a request arrives | Does not exist | Does not exist | Does not exist |
+| Ask a full-trust broker for it | No such broker | Platform-defined operations only | No such broker |
+| Be full-trust from the start | No: no EXE deployment on a phone | **Yes** — desktop bridge / `runFullTrust`; shipping CEF or WebView2 is routine | No |
+| Ship the platform's engine | Trident, in `WebView` | EdgeHTML, then WebView2 (Chromium) | EdgeHTML |
+
+**Consequence:** on WP8.1 the only route to rendering that is not Trident is the
+one this repository took — our own tokenizer, cascade, layout and painter in
+managed code, without a JIT. On Windows 10 *desktop* a modern engine is a
+different project on a different OS, and note that it is not reached by escaping
+anything: it is reached by targeting the platform where third-party engines were
+never sandboxed. Plainly: *"we could have Chromium"* is a statement about the
+operating system, not about a capability to request.
 
 ## What that means for "modern"
 

@@ -1,6 +1,6 @@
 # Maintaining BrowserForWP
 
-Read [`ARCHITECTURE.md`](ARCHITECTURE.md) first — the three platform laws explain
+Read [`ARCHITECTURE.md`](ARCHITECTURE.md) first — the four platform laws explain
 why several otherwise-reasonable changes are impossible.
 
 ## Requirements
@@ -95,6 +95,14 @@ node tools/proto/boxtree.mjs         # box tree, anonymous blocks, diagnostics w
 # IeModeProbe.vb exists, stays ES5 and reads documentMode, and that this file still
 # records the four levers that make re-configuring Trident impossible.
 node tools/proto/ie-adapt.mjs
+
+# The sandbox-escape decision record, same kind of object, different instrument.
+# There is no probe for this one -- nothing inside the container can measure a
+# privilege it does not have -- so its evidence is the deployment-time fact: it
+# parses Package.appxmanifest and asserts the declared capabilities are still
+# resource access only. It also asserts that ARCHITECTURE.md Law 4 and the
+# "Sandbox escape is closed" section here still state the four levers.
+node tools/proto/sandbox-escape.mjs
 
 # The probe verdict rule. It exists because an empty MissingFeatures list from a
 # probe that never ran was rendered in the UI as "no missing web features detected".
@@ -678,6 +686,46 @@ report the engine's limits truthfully (`CompatibilityProbe`).
 tap is how a handset turns that from an argument into a measurement. Until
 someone runs it, the probe is the instrument and this section is the claim — keep
 the two distinct, and record the measured `documentMode` here when it happens.
+
+### Sandbox escape is closed
+
+"Let the app start sandboxed and step outside when a request arrives" was
+examined and closed, the way IE-adaptation was, and it is the reason
+`docs/ARCHITECTURE.md` has a Law 4. The four levers such a plan needs, and why
+each is absent:
+
+- **no self-de-sandboxing API.** Container membership lives in the process token
+  and is set by the parent at creation; nothing in WinRT changes it, and WP8.1's
+  profile exposes no process creation. There is also no JIT to unlock: an
+  AppContainer denies writable+executable pages, and the `NETFX_CORE` profile has
+  no `Reflection.Emit`. A patched SDK does not help — the SDK decides what
+  compiles, the kernel decides what the process may do.
+- **a child process inherits the container.** Where process creation exists at
+  all (Windows 10, not WP8.1) a child born from an AppContainer app is created in
+  that same container. A "free" helper has to be launched by a full-trust parent,
+  which the app is not.
+- **capabilities grant resources, never memory policy.** Privilege is declared at
+  package time; this one declares `internetClientServer` and nothing else.
+  `runFullTrust` and `codeGeneration` are Windows 10 capabilities, and
+  `runFullTrust` is restricted to Microsoft-signed packages.
+- **broker contracts perform specified operations.** An `AppServiceConnection`
+  does a defined job for an app; it does not hand over a DOM, a renderer or
+  memory. WP8.1 app services were app-to-app only, with both manifests declaring
+  the relationship.
+
+`tools/proto/sandbox-escape.mjs` asserts the manifest fact — that this package
+still asks for resource access only — and that this section still states the four
+levers. It is a decision record like `ie-adapt.mjs`, not a logic mirror, and it has
+no runtime instrument on purpose: nothing inside the container can measure a
+privilege it does not have.
+
+**And the Windows 10 answer, because it gets asked every time.** On Windows 10
+*desktop* a packaged app using the desktop bridge is a real Win32 process: it can
+JIT, spawn processes and ship its own engine, which is how packaged CEF and
+WebView2 applications exist. That is a deployment-time decision rather than a
+request-time escape, and it was never available on Windows 10 *Mobile*. So the
+question "couldn't we have a modern engine?" has a yes in it — on a different
+operating system, as a different project.
 
 ### Deferred from the native-engine phase
 
