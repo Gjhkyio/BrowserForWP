@@ -97,10 +97,18 @@ node tools/check-polyfill.mjs
 
 # Static VB.NET structural check. Must print "0 finding(s)", exit code 0.
 # This is NOT a compiler. It catches block-balance errors, missing Implements
-# members, project/disk drift, namespace mismatch, resw key drift and unwired
-# XAML handlers — and it found a real End Property/End Class error. A green run
-# still does not mean the project compiles.
+# members, project/disk drift, namespace mismatch, resw key drift, unwired XAML
+# handlers and {ThemeResource} keys the platform does not define — and it found
+# a real End Property/End Class error. A green run still does not mean the
+# project compiles.
 node tools/check-vb.mjs
+
+# Regenerate the theme-resource key list that check-vb.mjs group 9 reads: the
+# keys Windows Phone 8.1 itself defines, read out of the guest's design
+# dictionaries. Do NOT point this at Windows Kits\8.1 — the desktop set is a
+# different set, and a desktop-only key is precisely the bug the check exists to
+# catch. Needs the guest; the check itself does not.
+bash tools/wp81-theme-keys.sh
 
 # Regenerate every WP8.1 image asset from the renderer.
 python3 tools/make_logo.py
@@ -393,20 +401,46 @@ file parsing correctly is exactly what makes this look like a code problem.
 `BUILD_EXIT=0`, no `BC` errors, and the package set is produced. Two further
 defects were found and verified by experiment:
 
-1. **A XAML theme key that does not exist on WP8.1.** `MainPage.xaml` used
-   `Background="{ThemeResource TextBoxBackgroundThemeBrush}"`, a **Windows Phone
-   8.0 (Silverlight)** key. WP8.1 XAML does not define it, and the failure is a
-   non-fatal internal lookup error:
+1. **A XAML theme key that does not exist on WP8.1. THIS ENTRY WAS WRONG, AND THE
+   SWAP IT DESCRIBES IS THE BUG.** Read the correction before using any part of it.
+   What the round did: `MainPage.xaml` used
+   `Background="{ThemeResource TextBoxBackgroundThemeBrush}"`, and that key was
+   replaced with `TextControlBackground` on the evidence that "the diagnostic
+   disappears, and returns when the old key is restored".
 
-   ```
-   Microsoft.Windows.UI.Xaml.Common.targets(327,9): Xaml Internal Error error
-   WMC9999: La chiave specificata non era presente nel dizionario.
-   ```
+   Both halves of that evidence are false.
 
-   It does not fail the build, so the brush just stays unset at runtime and the
-   message survives review indefinitely. Verified by swapping the key to
-   `TextControlBackground`: the diagnostic disappears, and returns when the old
-   key is restored. `ApplicationPageBackgroundThemeBrush` *is* a valid WP8.1 key.
+   - `TextBoxBackgroundThemeBrush` **is** a Windows Phone 8.1 key. It is defined in
+     the phone's own design dictionary
+     (`C:\Program Files (x86)\Windows Phone Kits\8.1\Include\abi\Xaml\Design\themeresources.xaml`,
+     `x:Key="TextBoxBackgroundThemeBrush"`, line 264) and *used by the phone's own
+     `TextBox` style* (`generic.xaml`, line 2413). It is not a WP8.0 Silverlight
+     name. `ApplicationPageBackgroundThemeBrush` is valid too, which that entry
+     gets right.
+   - `TextControlBackground` is defined **nowhere** on this platform: none of the
+     523 keys in the phone's dictionaries is it. The nearest name,
+     `TextControlBackgroundThemeOpacity`, is a `Double` where a `Brush` is needed.
+     It is a UWP / Windows 10 name, and the Windows 8.1 *desktop* dictionaries do
+     not define it either.
+   - The diagnostic the swap rested on does not track the key at all. It appeared
+     in **12 of 12** runs of the matrix documented further down this file, every one
+     of them taken *with* the swapped key in place, and it appears again now that
+     the key is back (`docs/superpowers/plans/2026-09-28-xaml-theme-resources.md`,
+     "Outcome").
+
+   So the swap replaced a working key with one that cannot resolve, and the
+   address-bar brush of `MainPage.xaml` has been unresolvable ever since. A Visual
+   Studio session reports it while reading the XAML — `The resource
+   "TextControlBackground" could not be resolved.` — because `{ThemeResource}` is
+   resolved when the page *loads*, not when it compiles, so no build here can see
+   it. `tools/check-vb.mjs` group 9 can: it checks every `{ThemeResource}` key in
+   the app's XAML against `tools/wp81-theme-keys.txt`, the 523 keys extracted from
+   the phone's own dictionaries by `bash tools/wp81-theme-keys.sh`.
+
+   **The transferable lesson:** a diagnostic whose presence varies between sessions
+   is not evidence about source code. The original probe was right that WMC9999 is
+   deterministic and harmless *within* a session, and wrong to let a single
+   before/after observation of a varying log line rewrite a platform name.
 
 2. **Ambiguous image assets.** The packaging step warned six times with
    `APPX1621`: a mixture of `Assets\Logo.png` and `Assets\Logo.scale-240.png`
@@ -455,6 +489,13 @@ time:
 App.xbf      = b7af0673a52d230302275b6c60fa2a64
 MainPage.xbf = 817580f71c93802ca8818c328074ea85
 ```
+
+**It is also independent of the XAML theme keys, which had once been believed to
+cause it.** Round 4 swapped a `{ThemeResource}` key specifically to silence this
+diagnostic; every one of the 12 runs above was taken with that swapped key present,
+and the diagnostic is still there now that the key has been removed again. It is not
+caused by any key in `MainPage.xaml`, and it is never a reason to edit a source file
+— correcting a real bad key is a separate matter, covered by check group 9.
 
 Earlier in the same day, isolated ad-hoc builds reported `WMC9999=0` three times
 with sources that are not distinguishable from today's, including one solution
@@ -766,7 +807,8 @@ What is and is not covered:
 | `tests/BrowserForWP.Crypto.Tests/` (`Vectors.generated.vb` + `VectorsSmokeTests.vb`) | Generated VB constants from those same vectors, plus length/shape checks. | **Compiled by the guest build; never executed.** |
 | `tests/BrowserForWP.Core.Tests/CoreLogicTests.vb` | Address normalisation, tab state, session/UA, settings, history, favourites, pin normalisation, hostname wildcards, language matching. | **Compiled by the guest build; never executed.** |
 | `tools/proto/core-logic.mjs` | A transliteration of `CoreLogicTests.vb`. 53 assertions, exit 1 on failure. | `node`, on any machine. **This is what actually runs those assertions.** |
-| `tools/check-vb.mjs` | 12 categories / 50 check groups over every `.vb`, `.vbproj`, `.xaml` and `.resw`. | `node`, on any machine. |
+| `tools/check-vb.mjs` | 13 categories / 63 check groups over every `.vb`, `.vbproj`, `.xaml` and `.resw`, including every `{ThemeResource}` key. | `node`, on any machine. |
+| `tools/wp81-theme-keys.sh` | Regenerates `tools/wp81-theme-keys.txt`, the 523 theme-resource keys Windows Phone 8.1 defines, read from the guest's design dictionaries. | `bash`, with the guest reachable. |
 | `tools/vm-build.cmd` | The real compiler, and the arbiter of pass/fail. | The Windows guest. |
 | `tools/wmc9999-probe.sh` | Build-diagnostic characterisation and XAML output invariance. | `bash`, on the host. |
 

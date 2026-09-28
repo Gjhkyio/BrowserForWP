@@ -82,6 +82,17 @@ makes every `ExtensionType.X` in the file report "'X' is not a member of
 `Default`/`DefaultTag` (a keyword), and `value` inside `Function Value()`
 (`BC30290`). Name locals after what they *hold*, not after the type.
 
+**Second-and-seven-eighths — a `{ThemeResource}` key is resolved at page LOAD, so
+no build here can check it.** It has to exist in the **phone's** dictionaries, not
+the desktop's: Windows 8.1 ships its own `themeresources.xaml` and `generic.xaml`
+under `Windows Kits\8.1`, the two sets differ, and a UWP-era name compiles,
+packages, and then cannot resolve on the handset. `tools/check-vb.mjs` group 9
+checks every key in the app's XAML against `tools/wp81-theme-keys.txt` (523 keys,
+regenerated with `bash tools/wp81-theme-keys.sh`); declare app-local keys in
+`App.xaml` and they are accepted. `MainPage.xaml` asked for `TextControlBackground`
+and shipped because a previous round swapped a *working* key for it and misread an
+intermittent `WMC9999` as proof — see `docs/MAINTAINING.md` Round 4.
+
 **Third — never edit `X25519.vb` or `BrowserForWP.Net/Tls13/` by hand.** Both
 are transliterations of executable prototypes, and those prototypes are the only
 real checks available off-Windows. Change the prototype first, watch it pass, then
@@ -173,6 +184,8 @@ verified if you skipped its command.
 | Any claim about re-configuring Trident | `node tools/proto/ie-adapt.mjs` | `9/9 checks passed` |
 | `BrowserForWP.Polyfill/compat.js` | `node tools/check-polyfill.mjs` | `is valid ES5` |
 | Any `.vb`, `.vbproj`, `.xaml` or `.resw` | `node tools/check-vb.mjs` | `0 finding(s)`, exit code 0 |
+| A `{ThemeResource}` key in XAML | `node tools/check-vb.mjs` | `0 finding(s)`; group 9 checks every key against `tools/wp81-theme-keys.txt` |
+| The theme-key oracle itself | `bash tools/wp81-theme-keys.sh` | `wrote .../tools/wp81-theme-keys.txt (523 keys)` |
 | `BrowserForWP/Assets/**` | `python3 tools/make_logo.py` | one line per generated PNG, exit code 0 |
 | UI / XAML / VB app code | Build in the guest: `tools\vm-build.cmd /t:Rebuild` | `BUILD_EXIT=0`, no `BC` errors; only the two deliberate `ResourceLoader` warnings |
 | Unexplained build diagnostics | `RUNS=4 bash tools/wmc9999-probe.sh` | `distinct XBF hash pairs across 12 runs: 1` |
@@ -240,9 +253,12 @@ tools/proto/*.mjs             ← runnable prototypes and logic mirrors
                                  shell-guards, ie-adapt, probe-verdict,
                                  fetch-rules, htmlparse, csscascade, boxtree)
 tools/make_logo.py            ← regenerates every image asset
-tools/check-vb.mjs            ← 12 categories / 62 check groups of static
-                                 VB/XAML/project/resw checks
+tools/check-vb.mjs            ← 13 categories / 63 check groups of static
+                                 VB/XAML/project/resw/theme-key checks
 tools/check-polyfill.mjs      ← ES5 validity of the shim
+tools/wp81-theme-keys.sh      ← regenerates the phone's 523 theme-resource keys
+                                 (guest-side) into tools/wp81-theme-keys.txt,
+                                 which check-vb.mjs group 9 reads
 tools/vm-build.cmd            ← the real build, run inside the Windows guest
 tools/wmc9999-probe.sh        ← characterises the WMC9999 diagnostic + XAML drift
 ```
@@ -395,6 +411,10 @@ Same loop, but the diagnosis comes first.
   reachable; reachable is not verified on a handset.
 - Adding a project to `BrowserForWP.sln` without the matching
   `Configuration|Platform` groups in its `.vbproj` (see the fifth constraint).
+- Replacing a `{ThemeResource}` key without checking it against
+  `tools/wp81-theme-keys.txt`, or "fixing" any build diagnostic by renaming a
+  platform key. A working key was once swapped for a UWP name that way, and the
+  page's brush stopped resolving.
 - Reporting the `tests/` projects as passing, or claiming `BrowserForWP.Core` is
   covered because they compile. `node tools/proto/core-logic.mjs` is what runs.
 - Implying the `WebView`'s own traffic is pinned, or that it ever uses TLS 1.3.
