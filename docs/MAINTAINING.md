@@ -589,6 +589,16 @@ Families actually observed, in order of how misleading they are:
   them; it could not before, and this was 24 errors in one file.
 - **Case-insensitive shadowing.** A local named after a type, property or
   enclosing member. The error names the *type*, never the local.
+- **Reserved words as member names.** `Public Property Error As String` is
+  `BC30183`, because `Error` is a reserved keyword in VB (the legacy `Error`
+  statement) and there is no fallback spelling. What makes this family misleading
+  is the *second*, spurious diagnostic it drags in: `BC42312`, "XML documentation
+  comments must precede a member or type declaration", pointing at a doc comment
+  that is perfectly correct — so the message you chase is the wrong one. Rename
+  (`ErrorMessage`) rather than escape (`[Error]`): escaping compiles, but it puts
+  brackets at every call site, a pattern nothing else in this repository uses.
+  Found by compiling the native-engine plan's Task 3, which had never been
+  compiled before it was executed.
 - **`Friend` across assemblies** (`BC30390`), and **nested classes** named
   unqualified from another file (`BC30002`).
 - **Profile gaps.** `System.Security.Cryptography` does not exist in the
@@ -600,6 +610,17 @@ Families actually observed, in order of how misleading they are:
   `BC30456` rather than a silent degradation. Check any BCL helper against the
   profile surface before using it; `tools/check-vb.mjs` knows only the three
   above.
+- **APIs that compile and then fail at run time.** `System.Text.Encoding.GetEncoding`
+  *is* in this profile — the guest build accepts it, so it is **not**
+  `BC30456` — yet Microsoft's own documentation for the method says unsupported
+  code pages throw (`ArgumentException` for some, `NotSupportedException` for
+  others) and that callers must catch rather than trust. Whether
+  `GetEncoding("ISO-8859-1")` resolves on a WP8.1 handset cannot be settled from
+  this machine, so no code here may depend on either answer: `NetDocumentFetcher`
+  asks and falls back to UTF-8. Note the shape of this family — the compiler is
+  *silent*, so a build-only check can never see it, and "it built" is not
+  evidence about it. A plan that anticipated `BC30456` here was anticipating the
+  wrong failure.
 - **A `Configuration|Platform` pair with no `PropertyGroup`.** Adding a project to
   the solution with `Debug|ARM.Build.0 = Debug|ARM` while its `.vbproj` defines
   only `Debug|AnyCPU` fails the entire build with "The OutputPath property is not

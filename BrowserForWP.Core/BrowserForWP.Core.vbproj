@@ -104,6 +104,7 @@
     <Compile Include="Diagnostics\TlsProbeCore.vb" />
     <Compile Include="Engine\IBrowserEngine.vb" />
     <Compile Include="Engine\TridentEngine.vb" />
+    <Compile Include="Engine\Native\IDocumentFetcher.vb" />
     <Compile Include="Storage\AppSettings.vb" />
     <Compile Include="Storage\FavoritesStore.vb" />
     <Compile Include="Storage\HistoryStore.vb" />
