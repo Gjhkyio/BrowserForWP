@@ -94,6 +94,7 @@
   <ItemGroup>
     <Compile Include="Browser\AddressNormalizer.vb" />
     <Compile Include="Browser\BrowserSession.vb" />
+    <Compile Include="Browser\LiteRedirects.vb" />
     <Compile Include="Browser\NightMode.vb" />
     <Compile Include="Browser\ReadingMode.vb" />
     <Compile Include="Browser\TrackerBlocklist.vb" />

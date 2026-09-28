@@ -24,7 +24,7 @@ sistema, non un limite delle ambizioni di questo progetto.
 | Includere il motore **Firefox / Gecko** | Mozilla ha cancellato Firefox per Windows Phone nel 2015. Nessun binario è mai stato distribuito. | Stessa astrazione sostituibile di cui sopra. |
 | **TLS 1.3** | Schannel su WP8.1 si ferma a **TLS 1.2** e il sistema non espone alcuna API per alzare il limite. | **Implementato dalle RFC, in codice gestito, sul dispositivo**: un client TLS 1.3 completo (`BrowserForWP.Net`) che gira su un `StreamSocket` grezzo, così il livello di rete dell'app parla TLS 1.3 già oggi. |
 | **HTTPS moderno** | La `WebView` di sistema negozia ciò che Schannel supporta. | `Tls13Client` + resolver DNS-over-HTTPS + pinning dei certificati per il livello di trasporto dell'app. |
-| **Pagine web moderne** | IE11 non riesce a interpretare né a eseguire il JavaScript moderno. | Un bundle di compatibilità ES5 sul dispositivo (`BrowserForWP.Polyfill`) più una diagnostica che spiega *perché* un sito ha fallito. **Il passo di iniezione non è ancora scritto**: il bundle è incluso nel pacchetto ma nulla lo carica in una pagina. Elencato tra le cose non fatte qui sotto. |
+| **Pagine web moderne** | IE11 non riesce a interpretare né a eseguire il JavaScript moderno. | Un bundle di compatibilità ES5 sul dispositivo (`BrowserForWP.Polyfill`) iniettato a `DOMContentLoaded` e di nuovo al completamento, più una diagnostica che spiega *perché* un sito ha fallito. Il bundle alza il livello minimo ma non può interpretare la sintassi ES6 né fornire `Proxy`/`Intl`/grid — vedi l'elenco qui sotto. |
 | **Nessun backend** | — | Ogni componente — crittografia, TLS, DNS, polyfill, cronologia, localizzazione — gira interamente sul telefono. Nessun server, nessun servizio proxy, nessuna telemetria. |
 
 > **Sull'idea del proxy locale sul dispositivo:** i Windows AppContainer
@@ -36,8 +36,10 @@ sistema, non un limite delle ambizioni di questo progetto.
 
 **In sintesi:** ottieni un livello di *trasporto* realmente moderno (TLS 1.3,
 DoH, pinning) su un livello di *rendering* invariato — perché su questo sistema
-il rendering non è modificabile. Il livello di *contenuto* (polyfill) è un bundle
-validato in attesa del codice di iniezione, non una funzionalità attiva. L'astrazione del motore significa che il giorno in cui punterai
+il rendering non è modificabile. Il livello di *contenuto* (polyfill) viene
+iniettato in ogni pagina a `DOMContentLoaded` e di nuovo al completamento;
+alza il livello minimo per i siti che rilevano le funzionalità, ma non può
+correggere la sintassi ES6 né le funzionalità motore mancanti. L'astrazione del motore significa che il giorno in cui punterai
 questo codice a un dispositivo con un motore moderno vero, i livelli di
 trasporto e contenuto verranno con te.
 
@@ -59,10 +61,10 @@ trasporto e contenuto verranno con te.
 - **Pinning dei certificati** — pin per sito gestiti dall'utente, con override
   esplicito e reversibile.
 - **Bundle di compatibilità ES5** (`BrowseForWP.Polyfill/compat.js`) — scritto,
-  verificato ES5 e incluso nel pacchetto. **Non ancora iniettato:**
-  `TridentEngine` espone `InvokeScriptAsync` ma nessuno lo chiama durante la
-  navigazione, quindi allo stato attuale il bundle non fa nulla a runtime. Vedi
-  l'elenco delle cose non fatte qui sotto.
+  verificato ES5, incluso e iniettato a `DOMContentLoaded` e al completamento
+  tramite `TridentEngine.InjectPolyfillAsync`. Alza il livello minimo; non può
+  interpretare la sintassi ES6 né fornire `Proxy`/`Intl`/grid. Vedi
+  l'elenco qui sotto.
 - **Interfaccia bilingue** — inglese e italiano, scelti automaticamente dalla
   lingua di visualizzazione del telefono, con override per singola app.
 - **Diagnostica** — una sonda integrata che segnala esattamente quale
@@ -177,11 +179,13 @@ invece che un vanto:
 - **Non è mai stato eseguito su un telefono.** Layout XAML, comportamento del
   WebView e prestazioni su hardware del 2014 non sono verificati. Compilare non
   significa eseguire.
-- **Una funzionalità pubblicizzata non è collegata.** Il bundle di compatibilità
-  ES5 è scritto, verificato e incluso nel pacchetto, ma **nulla lo inietta in
-  una pagina**: `TridentEngine` non ha codice di iniezione. Il README sosteneva
-  che fosse "iniettato in ogni documento prima dell'esecuzione degli script":
-  non era vero, e ora lo dichiara.
+- **Il bundle di compatibilità ha limiti architetturali.** Viene iniettato a
+  `DOMContentLoaded` e di nuovo al completamento, e alza il livello minimo per
+  i siti che rilevano le funzionalità — ma nessuno script iniettato può
+  interpretare la sintassi ES6 che il motore rifiuta, né fornire `Proxy`,
+  `Intl` o la grid CSS. La sonda di compatibilità riporta esattamente quale
+  limite una pagina ha colpito, e una modalità lettura di ripiego più i
+  redirect alle versioni leggere coprono il resto.
 - **Una affermazione precedente di questo README era sbagliata, e qui c'è la
   correzione.** Una revisione precedente sosteneva che l'app non potesse essere
   compilata, perché l'unica VM Windows disponibile è ARM64 e Microsoft non

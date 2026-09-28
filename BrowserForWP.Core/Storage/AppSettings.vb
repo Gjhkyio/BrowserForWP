@@ -35,6 +35,7 @@ Namespace Storage
             NightMode = False
             BlockTrackers = True
             RestoreSession = False
+            LiteRedirects = True
             LastSessionTabs = String.Empty
         End Sub
 
@@ -46,6 +47,7 @@ Namespace Storage
         Public Property NightMode As Boolean
         Public Property BlockTrackers As Boolean
         Public Property RestoreSession As Boolean
+        Public Property LiteRedirects As Boolean
         Public Property LastSessionTabs As String
 
         ''' <summary>Build a search URL from raw query text.</summary>
@@ -118,6 +120,7 @@ Namespace Storage
             hostMap("nightMode") = If(NightMode, "1", "0")
             hostMap("blockTrackers") = If(BlockTrackers, "1", "0")
             hostMap("restoreSession") = If(RestoreSession, "1", "0")
+            hostMap("liteRedirects") = If(LiteRedirects, "1", "0")
             hostMap("lastSessionTabs") = If(LastSessionTabs, String.Empty)
             Return hostMap
         End Function
@@ -167,6 +170,13 @@ Namespace Storage
             End If
             If sourceMap.TryGetValue("restoreSession", foundValue) Then
                 RestoreSession = (foundValue = "1")
+            End If
+            If sourceMap.TryGetValue("liteRedirects", foundValue) Then
+                If String.IsNullOrEmpty(foundValue) Then
+                    LiteRedirects = True
+                Else
+                    LiteRedirects = (foundValue = "1")
+                End If
             End If
             If sourceMap.TryGetValue("lastSessionTabs", foundValue) Then
                 LastSessionTabs = If(foundValue, String.Empty)

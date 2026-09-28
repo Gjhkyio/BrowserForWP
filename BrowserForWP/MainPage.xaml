@@ -118,6 +118,9 @@
                     <CheckBox x:Name="RestoreSessionToggle" Margin="0,4,0,0"
                               Checked="RestoreSessionToggle_Checked"
                               Unchecked="RestoreSessionToggle_Unchecked"/>
+                    <CheckBox x:Name="LiteRedirectsToggle" Margin="0,4,0,0"
+                              Checked="LiteRedirectsToggle_Checked"
+                              Unchecked="LiteRedirectsToggle_Unchecked"/>
 
                     <TextBlock x:Name="HomepageLabel" Margin="0,8,0,4"/>
                     <TextBox x:Name="HomepageBox" Width="280" InputScope="Url"

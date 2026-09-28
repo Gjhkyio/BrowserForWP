@@ -43,6 +43,7 @@ Public NotInheritable Class MainPage
         ContentHost.Child = DirectCast(_engine.Source, UIElement)
         Dim tridentView As TridentEngine = DirectCast(_engine, TridentEngine)
         AddHandler tridentView.View.NavigationStarting, AddressOf OnNavigationStarting
+        AddHandler tridentView.View.DOMContentLoaded, AddressOf OnDOMContentLoaded
         AddHandler tridentView.View.NavigationCompleted, AddressOf OnNavigationCompleted
         AddHandler tridentView.View.NavigationFailed, AddressOf OnNavigationFailed
 
@@ -78,6 +79,10 @@ Public NotInheritable Class MainPage
         MyBase.OnNavigatedFrom(e)
         RemoveHandler HardwareButtons.BackPressed, AddressOf OnHardwareBackPressed
         RemoveHandler DataTransferManager.GetForCurrentView().DataRequested, AddressOf OnShareRequested
+        Try
+            RemoveHandler DirectCast(_engine, TridentEngine).View.DOMContentLoaded, AddressOf OnDOMContentLoaded
+        Catch ex As Exception
+        End Try
         SavePersistedState()
     End Sub
 
@@ -152,6 +157,7 @@ Public NotInheritable Class MainPage
         NightModeToggle.Content = Localizer.Get("NightMode")
         BlockTrackersToggle.Content = Localizer.Get("BlockTrackers")
         RestoreSessionToggle.Content = Localizer.Get("RestoreSession")
+        LiteRedirectsToggle.Content = Localizer.Get("LiteRedirects")
         HomepageLabel.Text = Localizer.Get("HomepageLabel")
         SearchEngineLabel.Text = Localizer.Get("SearchEngineLabel")
         TabsTitle.Text = Localizer.Get("TabsTitle")
@@ -173,6 +179,7 @@ Public NotInheritable Class MainPage
         NightModeToggle.IsChecked = _appSettings.NightMode
         BlockTrackersToggle.IsChecked = _appSettings.BlockTrackers
         RestoreSessionToggle.IsChecked = _appSettings.RestoreSession
+        LiteRedirectsToggle.IsChecked = _appSettings.LiteRedirects
         HomepageBox.Text = _appSettings.Homepage
         DohServerBox.Text = _appSettings.DohUrl
 
@@ -319,6 +326,16 @@ Public NotInheritable Class MainPage
         SavePersistedState()
     End Sub
 
+    Private Sub LiteRedirectsToggle_Checked(sender As Object, e As RoutedEventArgs)
+        _appSettings.LiteRedirects = True
+        SavePersistedState()
+    End Sub
+
+    Private Sub LiteRedirectsToggle_Unchecked(sender As Object, e As RoutedEventArgs)
+        _appSettings.LiteRedirects = False
+        SavePersistedState()
+    End Sub
+
     Private Async Sub ApplyNightMode()
         Try
             Await DirectCast(_engine, TridentEngine).SetNightModeAsync(_appSettings.NightMode)
@@ -372,6 +389,13 @@ Public NotInheritable Class MainPage
         Dim destUrl As String = target.Url
         If target.IsSearch Then
             destUrl = _appSettings.SearchUrlFor(rawText)
+        End If
+
+        If _appSettings.LiteRedirects Then
+            Dim liteUrl As String = LiteRedirects.RedirectUrl(destUrl)
+            If Not String.IsNullOrEmpty(liteUrl) Then
+                destUrl = liteUrl
+            End If
         End If
 
         If IsBlockedTrackerUrl(destUrl) Then
@@ -634,6 +658,16 @@ Public NotInheritable Class MainPage
     End Sub
 
     Private Sub OnNavigationStarting(sender As WebView, e As WebViewNavigationStartingEventArgs)
+        If e.Uri IsNot Nothing AndAlso _appSettings.LiteRedirects Then
+            Dim liteUrl As String = LiteRedirects.RedirectUrl(e.Uri.ToString())
+            If Not String.IsNullOrEmpty(liteUrl) AndAlso liteUrl <> e.Uri.ToString() Then
+                e.Cancel = True
+                _session.ActiveTab.ReplaceCurrent(liteUrl)
+                AddressBox.Text = liteUrl
+                _engine.Navigate(liteUrl)
+                Return
+            End If
+        End If
         If e.Uri IsNot Nothing AndAlso IsBlockedTrackerUrl(e.Uri.ToString()) Then
             e.Cancel = True
             ShowBlockedTracker()
@@ -642,6 +676,16 @@ Public NotInheritable Class MainPage
         _navigationToken = e.Uri
         LoadProgress.Value = 10
         HideError()
+    End Sub
+
+    Private Async Sub OnDOMContentLoaded(sender As WebView, e As WebViewDOMContentLoadedEventArgs)
+        Try
+            Await DirectCast(_engine, TridentEngine).InjectPolyfillAsync()
+            If _appSettings.NightMode Then
+                Await DirectCast(_engine, TridentEngine).SetNightModeAsync(True)
+            End If
+        Catch ex As Exception
+        End Try
     End Sub
 
     Private Async Sub OnNavigationCompleted(sender As WebView, e As WebViewNavigationCompletedEventArgs)
@@ -664,6 +708,18 @@ Public NotInheritable Class MainPage
             Await DirectCast(_engine, TridentEngine).InjectPolyfillAsync()
             If _appSettings.NightMode Then
                 Await DirectCast(_engine, TridentEngine).SetNightModeAsync(True)
+            End If
+        Catch ex As Exception
+        End Try
+        Try
+            Dim compatProbe As New CompatibilityProbe()
+            Dim compatReport = Await compatProbe.RunAsync(_engine)
+            If compatReport.MissingFeatures.Count >= 8 Then
+                Dim entered As Boolean = Await DirectCast(_engine, TridentEngine).EnterReadingModeAsync()
+                If entered Then
+                    ErrorText.Text = Localizer.Get("ReaderFallback")
+                    ErrorText.Visibility = Visibility.Visible
+                End If
             End If
         Catch ex As Exception
         End Try

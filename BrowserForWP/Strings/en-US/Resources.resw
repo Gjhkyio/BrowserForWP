@@ -262,4 +262,10 @@
   <data name="BlockedTracker" xml:space="preserve">
     <value>Blocked tracker</value>
   </data>
+  <data name="ReaderFallback" xml:space="preserve">
+    <value>Showing simplified article</value>
+  </data>
+  <data name="LiteRedirects" xml:space="preserve">
+    <value>Prefer light site versions</value>
+  </data>
 </root>
