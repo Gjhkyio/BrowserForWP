@@ -29,6 +29,10 @@ Public NotInheritable Class MainPage
     Private _navigationToken As Object
     Private _searchTemplates As String()
 
+    ''' <summary>True while pickers/lists are repopulated, so programmatic selection is ignored.</summary>
+    Private _populatingLanguage As Boolean = False
+    Private _refreshingTabs As Boolean = False
+
     Protected Overrides Sub OnNavigatedTo(e As NavigationEventArgs)
         MyBase.OnNavigatedTo(e)
 
@@ -152,12 +156,17 @@ Public NotInheritable Class MainPage
     End Sub
 
     Private Sub PopulateLanguagePicker()
-        LanguagePicker.Items.Clear()
-        LanguagePicker.Items.Add(Localizer.Get("LanguageAutomatic"))
-        For Each supportedTag As String In LanguageCatalog.Supported
-            LanguagePicker.Items.Add(LanguageCatalog.DisplayName(supportedTag))
-        Next
-        LanguagePicker.SelectedIndex = If(Localizer.IsOverridden, 1, 0)
+        _populatingLanguage = True
+        Try
+            LanguagePicker.Items.Clear()
+            LanguagePicker.Items.Add(Localizer.Get("LanguageAutomatic"))
+            For Each supportedTag As String In LanguageCatalog.Supported
+                LanguagePicker.Items.Add(LanguageCatalog.DisplayName(supportedTag))
+            Next
+            LanguagePicker.SelectedIndex = If(Localizer.IsOverridden, 1, 0)
+        Finally
+            _populatingLanguage = False
+        End Try
     End Sub
 
     Private Sub PopulateSearchEnginePicker()
@@ -177,18 +186,23 @@ Public NotInheritable Class MainPage
     End Sub
 
     Private Sub RefreshTabsList()
-        TabsList.Items.Clear()
-        For i As Integer = 0 To _session.Tabs.Count - 1
-            Dim tabUrl As String = _session.Tabs(i).Url
-            If String.IsNullOrEmpty(tabUrl) Then
-                tabUrl = _appSettings.Homepage
+        _refreshingTabs = True
+        Try
+            TabsList.Items.Clear()
+            For i As Integer = 0 To _session.Tabs.Count - 1
+                Dim tabUrl As String = _session.Tabs(i).Url
+                If String.IsNullOrEmpty(tabUrl) Then
+                    tabUrl = _appSettings.Homepage
+                End If
+                TabsList.Items.Add((i + 1) & ": " & tabUrl)
+            Next
+            If _session.ActiveIndex >= 0 AndAlso _session.ActiveIndex < TabsList.Items.Count Then
+                TabsList.SelectedIndex = _session.ActiveIndex
             End If
-            TabsList.Items.Add((i + 1) & ": " & tabUrl)
-        Next
-        If _session.ActiveIndex >= 0 AndAlso _session.ActiveIndex < TabsList.Items.Count Then
-            TabsList.SelectedIndex = _session.ActiveIndex
-        End If
-        TabsButton.Content = Localizer.Get("NewTab") & " (" & _session.Tabs.Count & ")"
+            TabsButton.Content = Localizer.Get("NewTab") & " (" & _session.Tabs.Count & ")"
+        Finally
+            _refreshingTabs = False
+        End Try
     End Sub
 
     Private Sub RefreshHistoryList()
@@ -211,6 +225,9 @@ Public NotInheritable Class MainPage
     End Sub
 
     Private Sub LanguagePicker_SelectionChanged(sender As Object, e As SelectionChangedEventArgs)
+        If _populatingLanguage Then
+            Return
+        End If
         If LanguagePicker.SelectedIndex <= 0 Then
             Localizer.Override(Nothing)
             _appSettings.LanguageOverride = Nothing
@@ -331,6 +348,9 @@ Public NotInheritable Class MainPage
     End Sub
 
     Private Sub TabsList_SelectionChanged(sender As Object, e As SelectionChangedEventArgs)
+        If _refreshingTabs Then
+            Return
+        End If
         Dim picked As Integer = TabsList.SelectedIndex
         If picked < 0 OrElse picked >= _session.Tabs.Count Then
             Return
@@ -366,6 +386,7 @@ Public NotInheritable Class MainPage
         SettingsOverlay.Visibility = Visibility.Collapsed
         _session.ActiveTab.PushHistory(pickedUrl)
         _engine.Navigate(pickedUrl)
+        HistoryList.SelectedIndex = -1
     End Sub
 
     Private Sub ClearHistoryButton_Click(sender As Object, e As RoutedEventArgs)
@@ -382,6 +403,7 @@ Public NotInheritable Class MainPage
         SettingsOverlay.Visibility = Visibility.Collapsed
         _session.ActiveTab.PushHistory(pickedUrl)
         _engine.Navigate(pickedUrl)
+        FavoritesList.SelectedIndex = -1
     End Sub
 
     Private Sub AddFavoriteButton_Click(sender As Object, e As RoutedEventArgs)
@@ -438,7 +460,7 @@ Public NotInheritable Class MainPage
         _navigationToken = Nothing
 
         LoadProgress.Value = 100
-        Dim pageUrl As String = _engine.Source.ToString()
+        Dim pageUrl As String = e.Uri.ToString()
         _session.ActiveTab.ReplaceCurrent(pageUrl)
         AddressBox.Text = _session.ActiveTab.Url
         _historyStore.Add(_session.ActiveTab.Url, _session.ActiveTab.Url)
