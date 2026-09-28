@@ -211,6 +211,7 @@ verified if you skipped its command.
 | Picker/tab re-entrancy, sln registration | `node tools/proto/shell-guards.mjs` | `0 failure(s)` |
 | Text measurement (`ITextMeasurer`, either implementation) | `node tools/proto/textmeasure.mjs` | `10/10 checks passed` |
 | `BlockLayout.vb` / `InlineLayout.vb` / `LayoutBox.vb`, or anything that positions a box | `node tools/proto/boxlayout.mjs` | `19/19 checks passed` |
+| `EngineChoice.vb`, or anything that selects an engine or falls back automatically | `node tools/proto/engine-choice.mjs` | `21/21 checks passed` |
 | `CompatibilityProbe.vb` / any probe verdict | `node tools/proto/probe-verdict.mjs` | `9/9 checks passed` |
 | Any claim about re-configuring Trident | `node tools/proto/ie-adapt.mjs` | `9/9 checks passed` |
 | Any claim about leaving the AppContainer, or about getting JIT memory | `node tools/proto/sandbox-escape.mjs` | `15/15 checks passed` |
@@ -287,11 +288,11 @@ tools/proto/*.mjs             ← runnable prototypes and logic mirrors
                                  trackerblock, lightweight, modern-sites,
                                  shell-guards, ie-adapt, sandbox-escape,
                                  probe-verdict, fetch-rules, htmlparse,
-                                 csscascade, boxtree)
+                                 csscascade, boxtree, engine-choice)
 tools/make_logo.py            ← regenerates every image asset
 tools/proto/textmeasure.mjs   ← the measurer's arithmetic (referee)
 tools/proto/boxlayout.mjs     ← block/inline layout numbers (referee)
-tools/check-vb.mjs            ← 16 categories / 73 check groups of static
+tools/check-vb.mjs            ← 16 categories / 74 check groups of static
                                  VB/XAML/project/resw/theme-key/flavour checks
 tools/check-polyfill.mjs      ← ES5 validity of the shim
 tools/wp81-theme-keys.sh      ← regenerates the phone's 523 theme-resource keys

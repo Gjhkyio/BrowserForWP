@@ -108,6 +108,7 @@
     <Compile Include="Diagnostics\IeModeProbe.vb" />
     <Compile Include="Diagnostics\TlsProbeCore.vb" />
     <Compile Include="Engine\IBrowserEngine.vb" />
+    <Compile Include="Engine\EngineChoice.vb" />
     <Compile Include="Engine\TridentEngine.vb" />
     <Compile Include="Engine\Native\IDocumentFetcher.vb" />
     <Compile Include="Engine\Native\NodeTypes.vb" />

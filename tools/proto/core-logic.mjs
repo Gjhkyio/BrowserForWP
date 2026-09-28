@@ -569,6 +569,34 @@ const NORMAL_LINE_HEIGHT = 1.2;
 check('measurer advance', 4 * 16 * ADVANCE_FACTOR === 32);
 check('measurer normal line height', 16 * NORMAL_LINE_HEIGHT === 19.2);
 
+// ── The engine-choice rule (mirror of CoreLogicTests.vb) ──────────────────
+// tools/proto/engine-choice.mjs refuses this exhaustively; these are the rows
+// the compiled half must agree on too, and the third is the one that matters.
+function chooseEngine(setting, measured, missing) {
+  const wanted = setting === 'trident' || setting === 'native' ? setting : 'auto';
+  if (wanted === 'native') return 'native';
+  if (wanted === 'trident') return 'trident';
+  if (!measured) return 'trident';
+  return missing >= 8 ? 'native' : 'trident';
+}
+check('engine choice: explicit native wins with no measurement',
+  chooseEngine('native', false, 0) === 'native');
+check('engine choice: explicit trident wins over a broken probe',
+  chooseEngine('trident', true, 99) === 'trident');
+check('engine choice: auto never switches on an absent measurement',
+  chooseEngine('auto', false, 99) === 'trident');
+check('engine choice: auto switches at the threshold',
+  chooseEngine('auto', true, 8) === 'native');
+
+// ── The three engine shapes behind EngineCapabilities.NeedsPolyfillLayer ──
+const needsPolyfillLayer = (scripting, modernJs) => scripting && !modernJs;
+check('capabilities: an IE11-shaped engine needs the polyfill layer',
+  needsPolyfillLayer(true, false) === true);
+check('capabilities: a modern engine does not',
+  needsPolyfillLayer(true, true) === false);
+check('capabilities: an engine with no script host does not',
+  needsPolyfillLayer(false, false) === false);
+
 // ── Summary ───────────────────────────────────────────────────────────────
 if (failures > 0) {
   console.log(`\n${failures} core-logic failure(s) out of ${checks}.`);

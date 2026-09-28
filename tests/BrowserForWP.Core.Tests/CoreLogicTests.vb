@@ -6,6 +6,7 @@
 ' off-device (tools/proto/useragents.mjs, pinstore.mjs).
 
 Imports BrowserForWP.Core.Browser
+Imports BrowserForWP.Core.Engine
 Imports BrowserForWP.Core.Engine.Native
 Imports BrowserForWP.Core.Storage
 Imports BrowserForWP.Localization
@@ -68,6 +69,32 @@ Namespace CoreTests
             Dim fixedMeasurer As New FixedAdvanceTextMeasurer()
             Check(fixedMeasurer.MeasureWidth("abcd", measureStyle) = 32, "measurer advance")
             Check(fixedMeasurer.LineHeight(measureStyle) = 19.2, "measurer normal line height")
+            ran += 1
+
+            ' The engine-choice rule. Refused exhaustively off-device by
+            ' tools/proto/engine-choice.mjs; these four are the rows that also have
+            ' to hold in the compiled half, and the third is the one that matters:
+            ' an absent measurement is never grounds for switching engines.
+            Check(EngineChoice.Decide(EngineChoice.Native, False, 0) = EngineChoice.Native,
+                  "engine choice: explicit native wins with no measurement")
+            Check(EngineChoice.Decide(EngineChoice.Trident, True, 99) = EngineChoice.Trident,
+                  "engine choice: explicit trident wins over a broken probe")
+            Check(EngineChoice.Decide(EngineChoice.Auto, False, 99) = EngineChoice.Trident,
+                  "engine choice: auto never switches on an absent measurement")
+            Check(EngineChoice.Decide(EngineChoice.Auto, True, EngineChoice.AutomaticFallbackThreshold) = EngineChoice.Native,
+                  "engine choice: auto switches at the threshold")
+            ran += 1
+
+            ' The three engine shapes. The third is the defect this property had:
+            ' an engine with no script host is not an engine that wants a polyfill
+            ' layer, and saying it did would have had the shell injecting compat.js
+            ' into something with no window to inject into.
+            Dim scriptingEngine As New EngineCapabilities With {.SupportsScripting = True, .SupportsModernJavaScript = False}
+            Dim modernEngine As New EngineCapabilities With {.SupportsScripting = True, .SupportsModernJavaScript = True}
+            Dim markupOnlyEngine As New EngineCapabilities With {.SupportsScripting = False, .SupportsModernJavaScript = False}
+            Check(scriptingEngine.NeedsPolyfillLayer, "capabilities: an IE11-shaped engine needs the polyfill layer")
+            Check(Not modernEngine.NeedsPolyfillLayer, "capabilities: a modern engine does not")
+            Check(Not markupOnlyEngine.NeedsPolyfillLayer, "capabilities: an engine with no script host does not")
             ran += 1
 
             Dim appSettings As New AppSettings()

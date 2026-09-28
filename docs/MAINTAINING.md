@@ -71,6 +71,11 @@ node tools/proto/textmeasure.mjs
 # repository predicts where a box lands.
 node tools/proto/boxlayout.mjs
 
+# The engine-choice rule: what the automatic fallback decides, and the row that
+# matters most — an absent measurement is never grounds for switching engines.
+# Must print "21/21 checks passed".
+node tools/proto/engine-choice.mjs
+
 # The shell and delivery guards that arrived with the merged browser shell.
 node tools/proto/shell-guards.mjs    # picker/tab re-entrancy, completed URL, sln registration
 node tools/proto/trackerblock.mjs    # host blocklist matching
@@ -1031,7 +1036,8 @@ What is and is not covered:
 | `tools/proto/core-logic.mjs` | A transliteration of `CoreLogicTests.vb`. 55 assertions, exit 1 on failure. | `node`, on any machine. **This is what actually runs those assertions.** |
 | `tools/proto/textmeasure.mjs` | The measurer's arithmetic, plus parity with the VB that implements it. | `node`, on any machine. |
 | `tools/proto/boxlayout.mjs` | Block widths and heights, line breaking, alignment. The referee for `BlockLayout.vb` / `InlineLayout.vb`. | `node`, on any machine. |
-| `tools/check-vb.mjs` | 16 categories / 73 check groups over every `.vb`, `.vbproj`, `.xaml` and `.resw`, including every `{ThemeResource}` key, every project's flavour GUID, (group 15) every privileged API name and every manifest capability that would ask the platform for something it cannot grant, and (group 16) every API whose capability the manifest fails to declare. | `node`, on any machine. |
+| `tools/proto/engine-choice.mjs` | The `EngineChoice` decision table, plus the source contract around it: the constants by name, and the reasons as resource keys rather than sentences. | `node`, on any machine. |
+| `tools/check-vb.mjs` | 16 categories / 74 check groups over every `.vb`, `.vbproj`, `.xaml` and `.resw`, including every `{ThemeResource}` key, every project's flavour GUID, (group 15) every privileged API name and every manifest capability that would ask the platform for something it cannot grant, and (group 16) every API whose capability the manifest fails to declare. | `node`, on any machine. |
 | `tools/wp81-theme-keys.sh` | Regenerates `tools/wp81-theme-keys.txt`, the 523 theme-resource keys Windows Phone 8.1 defines, read from the guest's design dictionaries. | `bash`, with the guest reachable. |
 | `tools/vm-build.cmd` | The real compiler, and the arbiter of pass/fail. | The Windows guest. |
 | `tools/wmc9999-probe.sh` | Build-diagnostic characterisation and XAML output invariance. | `bash`, on the host. |

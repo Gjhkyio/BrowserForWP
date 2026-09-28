@@ -46,6 +46,7 @@ Namespace Engine
                     .Name = "System WebView",
                     .RenderingEngine = "Trident (IE11)",
                     .SupportsTls13 = False,
+                    .SupportsScripting = True,
                     .SupportsModernJavaScript = False,
                     .SupportsWebSocket = True,
                     .SupportsFetch = False
