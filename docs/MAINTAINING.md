@@ -549,6 +549,31 @@ probe and the pin store all exist and are wired. What remains is this.
    `DOMContentLoaded` injection, reading-mode fallback, lite redirects, night mode
    and 2014-hardware performance are all unverified. Compiling is not running.
 
+### IE-adaptation is closed
+
+"Adapt Internet Explorer instead of writing an engine" was examined and closed.
+Trident **is** the platform engine, and an app cannot re-configure it. The four
+levers such a plan needs, and why each is absent:
+
+- **no API to set the WebView document mode.** `WebView` exposes no document-mode
+  property, and the hosted engine is already the newest available.
+- **no Trident newer than IE11 ever shipped for this OS.** There is nothing to
+  move up to; `X-UA-Compatible: IE=edge` selects the engine that is already
+  running.
+- **no API to toggle IE11 feature flags.** WP8.1 gives an app no switch over
+  which CSS/JS features Trident honours.
+- **no MSHTML surface is reachable from a WinRT app.** No COM activation of
+  `mshtml`, no `IWebBrowser2`, no document-mode control.
+
+What an app *can* do is what this repository already does: inject an ES5
+compatibility layer into the document (`TridentEngine.InjectPolyfillAsync`) and
+report the engine's limits truthfully (`CompatibilityProbe`).
+
+`BrowserForWP.Core/Diagnostics/IeModeProbe.vb` plus a **Diagnostics → IE mode**
+tap is how a handset turns that from an argument into a measurement. Until
+someone runs it, the probe is the instrument and this section is the claim — keep
+the two distinct, and record the measured `documentMode` here when it happens.
+
 ### Error taxonomy
 
 The library project files are hand-authored. If one of them stops being
