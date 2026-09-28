@@ -29,6 +29,11 @@ NotInheritable Class App
         End If
 #End If
 
+        ' Resolve the UI language from the phone's display-language list before any
+        ' page exists, so the first frame is already localized instead of flashing
+        ' English and then switching to Italian.
+        Localization.Localizer.Initialize()
+
         Dim rootFrame As Frame = TryCast(Window.Current.Content, Frame)
 
         ' Do not repeat app initialization when the Window already has content,

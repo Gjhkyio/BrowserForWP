@@ -104,12 +104,48 @@
     </AppxManifest>
   </ItemGroup>
   <ItemGroup>
+    <!-- Both scale-100 and scale-240 assets. The manifest names the unsuffixed
+         files; the platform selects the scale variant at runtime. Regenerate
+         every one of these with: python3 tools/make_logo.py -->
+    <Content Include="Assets\Logo.png" />
     <Content Include="Assets\Logo.scale-240.png" />
+    <Content Include="Assets\SmallLogo.png" />
     <Content Include="Assets\SmallLogo.scale-240.png" />
+    <Content Include="Assets\SplashScreen.png" />
     <Content Include="Assets\SplashScreen.scale-240.png" />
+    <Content Include="Assets\Square71x71Logo.png" />
     <Content Include="Assets\Square71x71Logo.scale-240.png" />
+    <Content Include="Assets\StoreLogo.png" />
     <Content Include="Assets\StoreLogo.scale-240.png" />
+    <Content Include="Assets\WideLogo.png" />
     <Content Include="Assets\WideLogo.scale-240.png" />
+    <!-- Injected into every document by TridentEngine. -->
+    <Content Include="Polyfill\compat.js" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- UI strings. The hosting platform resolves the language; see
+         BrowserForWP.Localization/Localizer.vb for the resolution order. -->
+    <PRIResource Include="Strings\en-US\Resources.resw" />
+    <PRIResource Include="Strings\it-IT\Resources.resw" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\BrowserForWP.Core\BrowserForWP.Core.vbproj">
+      <Project>{C0DE0002-0002-4A2B-9C3D-1B2C3D4E5F02}</Project>
+      <Name>BrowserForWP.Core</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\BrowserForWP.Crypto\BrowserForWP.Crypto.vbproj">
+      <Project>{C0DE0001-0001-4A2B-9C3D-1B2C3D4E5F01}</Project>
+      <Name>BrowserForWP.Crypto</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\BrowserForWP.Localization\BrowserForWP.Localization.vbproj">
+      <Project>{C0DE0003-0003-4A2B-9C3D-1B2C3D4E5F03}</Project>
+      <Name>BrowserForWP.Localization</Name>
+    </ProjectReference>
+    <!--
+      BrowserForWP.Net (TLS 1.3, DoH, HTTP client) is not yet referenced: it is
+      the next task in docs/superpowers/plans/2026-09-28-browserforwp.md.
+      Add it here once Tasks 6-9 land.
+    -->
   </ItemGroup>
   <ItemGroup>
     <ApplicationDefinition Include="App.xaml">

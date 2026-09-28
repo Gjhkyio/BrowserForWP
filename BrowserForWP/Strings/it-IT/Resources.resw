@@ -1,0 +1,160 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="metadata">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" />
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string" />
+              <xsd:attribute name="type" type="xsd:string" />
+              <xsd:attribute name="mimetype" type="xsd:string" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="assembly">
+            <xsd:complexType>
+              <xsd:attribute name="alias" type="xsd:string" />
+              <xsd:attribute name="name" type="xsd:string" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" msdata:Ordinal="1" />
+              <xsd:attribute name="type" type="xsd:string" msdata:Ordinal="3" />
+              <xsd:attribute name="mimetype" type="xsd:string" msdata:Ordinal="4" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="resheader">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+
+  <!-- Applicazione -->
+  <data name="AppName" xml:space="preserve">
+    <value>BrowserForWP</value>
+  </data>
+
+  <!-- Barra degli indirizzi -->
+  <data name="AddressPlaceholder" xml:space="preserve">
+    <value>Cerca o inserisci un indirizzo</value>
+    <comment>Testo segnaposto mostrato nella barra degli indirizzi quando è vuota.</comment>
+  </data>
+  <data name="Go" xml:space="preserve">
+    <value>Vai</value>
+  </data>
+
+  <!-- Comandi di navigazione -->
+  <data name="Back" xml:space="preserve">
+    <value>Indietro</value>
+  </data>
+  <data name="Forward" xml:space="preserve">
+    <value>Avanti</value>
+  </data>
+  <data name="Reload" xml:space="preserve">
+    <value>Ricarica</value>
+  </data>
+  <data name="Stop" xml:space="preserve">
+    <value>Interrompi</value>
+  </data>
+  <data name="NewTab" xml:space="preserve">
+    <value>Nuova scheda</value>
+  </data>
+  <data name="CloseTab" xml:space="preserve">
+    <value>Chiudi scheda</value>
+  </data>
+  <data name="Settings" xml:space="preserve">
+    <value>Impostazioni</value>
+  </data>
+
+  <!-- Stato della connessione -->
+  <data name="SecuritySecure" xml:space="preserve">
+    <value>Connessione sicura</value>
+  </data>
+  <data name="SecurityInsecure" xml:space="preserve">
+    <value>Non sicura</value>
+  </data>
+  <data name="SecurityTls13" xml:space="preserve">
+    <value>Sicura — TLS 1.3</value>
+    <comment>Usato quando il trasporto dell'app ha negoziato TLS 1.3.</comment>
+  </data>
+
+  <!-- Stato -->
+  <data name="Loading" xml:space="preserve">
+    <value>Caricamento…</value>
+  </data>
+  <data name="LoadComplete" xml:space="preserve">
+    <value>Completato</value>
+  </data>
+
+  <!-- Lingua -->
+  <data name="LanguageLabel" xml:space="preserve">
+    <value>Lingua</value>
+  </data>
+  <data name="LanguageAutomatic" xml:space="preserve">
+    <value>Automatica (usa la lingua del telefono)</value>
+  </data>
+
+  <!-- Diagnostica -->
+  <data name="DiagnosticsTitle" xml:space="preserve">
+    <value>Diagnostica</value>
+  </data>
+  <data name="DiagnosticsProbe" xml:space="preserve">
+    <value>Esegui il probe TLS</value>
+  </data>
+  <data name="DiagnosticsCompatProbe" xml:space="preserve">
+    <value>Esegui il probe di compatibilità</value>
+  </data>
+  <data name="DiagnosticsEngineLabel" xml:space="preserve">
+    <value>Motore di rendering</value>
+  </data>
+  <data name="DiagnosticsNoMissingFeatures" xml:space="preserve">
+    <value>Nessuna funzionalità web mancante rilevata.</value>
+  </data>
+  <data name="DiagnosticsClose" xml:space="preserve">
+    <value>Chiudi</value>
+  </data>
+
+  <!-- Errori -->
+  <data name="ErrorUnknownScheme" xml:space="preserve">
+    <value>Questo indirizzo usa uno schema non supportato.</value>
+  </data>
+  <data name="ErrorPageFailed" xml:space="preserve">
+    <value>Impossibile visualizzare questa pagina.</value>
+  </data>
+  <data name="ErrorNoConnection" xml:space="preserve">
+    <value>Impossibile raggiungere il server.</value>
+  </data>
+  <data name="ErrorTlsHandshake" xml:space="preserve">
+    <value>Impossibile stabilire la connessione sicura.</value>
+  </data>
+</root>

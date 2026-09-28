@@ -20,7 +20,6 @@ Namespace Engine
 
         Public Sub New()
             _view = New WebView()
-            _view.IsScriptNotifyEnabled = True
         End Sub
 
         ''' <summary>The WebView itself, for the view layer to host.</summary>
