@@ -205,6 +205,17 @@
                     <TextBlock x:Name="PinStatus" TextWrapping="Wrap"
                                Opacity="0.8" Margin="0,4,0,8"/>
 
+                    <Button x:Name="ParsePageButton" Margin="0,8,0,6"
+                            Click="ParsePageButton_Click"/>
+                    <TextBlock x:Name="ParseResult" TextWrapping="Wrap"
+                               FontFamily="Consolas" FontSize="12"
+                               MaxHeight="220" Margin="0,0,0,8" Opacity="0.85"/>
+                    <Button x:Name="IeModeButton" Margin="0,0,0,6"
+                            Click="IeModeButton_Click"/>
+                    <TextBlock x:Name="IeModeResult" TextWrapping="Wrap"
+                               FontFamily="Consolas" FontSize="12"
+                               MaxHeight="160" Margin="0,0,0,8" Opacity="0.85"/>
+
                     <Button x:Name="DiagnosticsBackButton" Margin="0,6,0,0"
                             Click="DiagnosticsBackButton_Click"/>
                 </StackPanel>

@@ -6,6 +6,7 @@
 Imports BrowserForWP.Core.Browser
 Imports BrowserForWP.Core.Diagnostics
 Imports BrowserForWP.Core.Engine
+Imports BrowserForWP.Core.Engine.Native
 Imports BrowserForWP.Core.Storage
 Imports BrowserForWP.Localization
 Imports BrowserForWP.Net.Tls13
@@ -178,6 +179,8 @@ Public NotInheritable Class MainPage
         PinTitle.Text = Localizer.Get("PinTitle")
         PinAddButton.Content = Localizer.Get("PinAdd")
         PinRemoveButton.Content = Localizer.Get("PinRemove")
+        ParsePageButton.Content = Localizer.Get("ParseThisPage")
+        IeModeButton.Content = Localizer.Get("IeModeCheck")
 
         DesktopToggle.IsChecked = _session.DesktopMode
         PrivateModeToggle.IsChecked = _session.PrivateMode
@@ -884,4 +887,92 @@ Public NotInheritable Class MainPage
         SavePersistedState()
         PinStatus.Text = Localizer.Get("PinStored")
     End Sub
+
+    ''' <summary>
+    ''' Fetch the active tab's URL over the app's own TLS 1.3 transport and show
+    ''' what the native pipeline understood. This is the demonstration that the
+    ''' engine exists: it is the only place in the product where a page LOAD goes
+    ''' over Tls13Client rather than through the WebView's Schannel path.
+    ''' </summary>
+    Private Async Sub ParsePageButton_Click(sender As Object, e As RoutedEventArgs)
+        ParsePageButton.IsEnabled = False
+        Try
+            Dim tabUrl As String = _session.ActiveTab.Url
+            If String.IsNullOrEmpty(tabUrl) Then
+                ParseResult.Text = Localizer.Get("ParseNoDocument")
+                Return
+            End If
+
+            Dim fetcher As New BrowserForWP.Diagnostics.NetDocumentFetcher()
+            Dim response As DocumentResponse = Await fetcher.FetchAsync(tabUrl, _appSettings.DohUrl)
+
+            If Not String.IsNullOrEmpty(response.ErrorMessage) Then
+                ParseResult.Text = Localizer.Get("ParseFailed") & " " & response.ErrorMessage
+                Return
+            End If
+            If Not response.IsHtml Then
+                ParseResult.Text = Localizer.Get("ParseNoDocument")
+                Return
+            End If
+
+            Dim boxTree As BoxNode = BoxTreeBuilder.BuildPage(response.Text, InlineStyleText(response.Text))
+            ' Every user-visible word comes from the resw, including the unit: the
+            ' plan wrote " box(es)" inline, which is exactly the hardcoded English
+            ' this repository forbids.
+            Dim headerText As String = response.FinalUrl & "  [" & response.EffectiveCharset & "]  " &
+                                       Localizer.Get("ParseBoxCount") & boxTree.DescendantCount().ToString() & vbCrLf
+            ParseResult.Text = headerText & DocumentDumper.Dump(boxTree)
+        Catch ex As Exception
+            ParseResult.Text = Localizer.Get("ParseFailed") & " " & ex.Message
+        Finally
+            ParsePageButton.IsEnabled = True
+        End Try
+    End Sub
+
+    ''' <summary>
+    ''' Ask the hosted engine how it is configured. This is the instrument behind
+    ''' docs/MAINTAINING.md's "IE-adaptation is closed": the four levers a
+    ''' "re-configure Trident" plan needs are absent from the API surface, and this
+    ''' is how a handset confirms that instead of taking our word for it. Record the
+    ''' mode it reports in that section when someone runs it on a device.
+    ''' </summary>
+    Private Async Sub IeModeButton_Click(sender As Object, e As RoutedEventArgs)
+        IeModeButton.IsEnabled = False
+        Try
+            Dim modeReport As IeModeReport = Await IeModeProbe.RunAsync(_engine)
+            If modeReport Is Nothing Then
+                IeModeResult.Text = Localizer.Get("ProbeNotRun")
+                Return
+            End If
+            IeModeResult.Text = Localizer.Get("IeModeReport") & modeReport.DocumentMode.ToString() & vbCrLf &
+                                modeReport.RawJson
+        Catch ex As Exception
+            IeModeResult.Text = Localizer.Get("ErrorPageFailed")
+        Finally
+            IeModeButton.IsEnabled = True
+        End Try
+    End Sub
+
+    ''' <summary>
+    ''' Collect the text of every inline style element, because the tree builder
+    ''' drops script and style bodies. Anything more would need a real head parser.
+    ''' </summary>
+    Private Shared Function InlineStyleText(html As String) As String
+        If String.IsNullOrEmpty(html) Then Return String.Empty
+        Dim collected As New System.Text.StringBuilder()
+        Dim lowered As String = html.ToLowerInvariant()
+        Dim searchFrom As Integer = 0
+        While True
+            Dim openAt As Integer = lowered.IndexOf("<style", searchFrom, StringComparison.Ordinal)
+            If openAt < 0 Then Exit While
+            Dim bodyStart As Integer = lowered.IndexOf(">"c, openAt)
+            If bodyStart < 0 Then Exit While
+            Dim closeAt As Integer = lowered.IndexOf("</style", bodyStart)
+            If closeAt < 0 Then Exit While
+            collected.Append(html.Substring(bodyStart + 1, closeAt - bodyStart - 1))
+            collected.Append(vbLf)
+            searchFrom = closeAt + 1
+        End While
+        Return collected.ToString()
+    End Function
 End Class

@@ -2521,3 +2521,69 @@ Every task ends with its own gate. These are the commands, with the counts this 
 **Counting the failures honestly.** Each task's Step 2 states the exact number and identity of the failures expected before implementation, so "not written yet" cannot be confused with "written wrong". Those numbers were measured, not estimated: 9, 5, 7, 3, 3, 3, and 16 respectively, and each script was confirmed to exit 1 in that state.
 
 **Two things this plan cannot verify, stated rather than hidden.** The latin1 branch in `NetDocumentFetcher` may hit a profile gap (`BC30456`); Task 3 Step 7 says what to do when it does. And nothing here runs on a handset, so Task 8's on-device output is recorded as pending in the verification matrix and in Task 1's verdict.
+
+---
+
+## Outcome — what executing this plan actually produced
+
+Appended rather than rewritten: the plan above is what was planned, and this is
+what it cost. Every number below was measured.
+
+**All eight tasks landed.** `BrowserForWP.Core/Engine/Native/` now holds the
+`IDocumentFetcher` seam, the HTML tokenizer and tree builder, the CSS parser, the
+selector matcher, the cascade, the box tree, and `Diagnostics/DocumentDumper.vb`,
+and the diagnostics view exposes **Parse current page**. It also exposes **Check
+IE mode**, which the plan did not ask for — Task 1 promises that an IE-mode tap is
+how a handset turns the decision into a measurement, and no task built one, so the
+instrument would have shipped unreachable.
+
+**Eight defects came out of executing it, which reading it had not.**
+
+1. `Public Property Error As String` is `BC30183`: `Error` is a reserved VB
+   keyword. It also drags a spurious `BC42312` onto the correct doc comment above
+   it, so the message you chase is the wrong one. Renamed to `ErrorMessage`.
+2. `Microsoft.VisualBasic.ControlChars` is absent from the Store profile
+   (`BC30451`) even though `Microsoft.VisualBasic.Strings` is present. Fourth
+   profile gap on record; `tools/check-vb.mjs` now flags it.
+3. `Encoding.GetEncoding("ISO-8859-1")` **compiles**, so the `BC30456` this plan's
+   Task 3 Step 7 anticipated never arrived. Whether it *resolves* at run time is a
+   question the compiler cannot answer, so the latin1 branch asks and falls back
+   instead of assuming.
+4. The prototype's void-element assertion expected two children for
+   `<p>a<br>b</p>`, which has three — it rejected a correct implementation, the
+   same class of error as the cascade assertion the plan already recorded.
+5. `fetch-rules.mjs` asserted that `NetDocumentFetcher.vb` never names
+   `Accept-Encoding` while reading the comments, so it forbade documenting the rule
+   it enforced; `IDocumentFetcher.vb` failed the same way. Both strip VB comments
+   now — never string literals — and carry negative controls.
+6. The resolver's first draft kept cascade state in `Shared` dictionaries, which
+   would have leaked one element's winners into the next. Caught before any build.
+7. Task 8's own code contained `" box(es)"` inline: hardcoded English, which this
+   plan's Global Constraints forbid. It is now `ParseBoxCount` in both languages.
+8. Task 1's `IeModeProbe` had no caller anywhere in the plan, so the measurement
+   the task's own text promises could not have been taken. See above.
+
+**The verification matrix is wrong in three rows, and "Counting the failures
+honestly" is wrong in five.** Measured with `tail -1` on each script:
+
+| Script | This plan said | It is | Why |
+| --- | --- | --- | --- |
+| `ie-adapt.mjs` | 9 | 9 | — |
+| `probe-verdict.mjs` | 9 | 9 | — |
+| `fetch-rules.mjs` | 18 | **25** | two negative controls for the comment stripper, plus four charset-fallback rules |
+| `htmlparse.mjs` | 29 | **30** | simply miscounted by one |
+| `csscascade.mjs` | 47 | 47 | — |
+| `boxtree.mjs` | 32 | **39** | the IE-mode wiring checks Task 1's ruling required |
+
+The pre-implementation failure counts are not `9, 5, 7, 3, 3, 3, 16` either.
+Tasks 6 and 8 each have a RED state whose identity depends on which earlier task
+has already merged — after Task 5, `CssParser.vb` exists, so those three parity
+checks pass — and Task 6 Step 6 adds four parity assertions where its Step 2 lists
+three. Measured: 9, then 5, then 7, then 3, then 3, then 4, then 3, then 21.
+
+**Still unverified, and it is the same gap as always.** Nothing here has run on a
+handset. The prototypes prove the algorithms, the guest build proves the ports
+compile, and neither proves the ports behave as their prototypes do — a gap this
+plan's own Task 4 note states and cannot close. The matrix's last row, running
+**Diagnostics → Parse current page** on a real URL, is still pending; so is the
+`documentMode` reading that would close Task 1.

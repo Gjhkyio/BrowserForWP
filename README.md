@@ -24,6 +24,7 @@ project's ambition.
 | **TLS 1.3** | Schannel on WP8.1 tops out at **TLS 1.2**, and the OS offers no API to raise it. | **Implemented from the RFCs, in managed code, on-device**: a complete TLS 1.3 client (`BrowserForWP.Net`) running over a raw `StreamSocket`, so the app's own network layer speaks TLS 1.3 today. |
 | **Modern HTTPS** | The system `WebView` negotiates whatever Schannel supports. | `Tls13Client` + DNS-over-HTTPS resolver + certificate pinning for the app's transport layer. |
 | **Modern web pages** | IE11 cannot parse or run modern JavaScript. | An on-device ES5 compatibility bundle (`BrowserForWP.Polyfill`) injected at `DOMContentLoaded` and again on completion, plus a compatibility diagnostic that tells you *why* a given site failed. The bundle raises the floor but cannot parse ES6 syntax or supply `Proxy`/`Intl`/grid — see the disclosure below. |
+| **A from-scratch engine** | No new engine can be built *instead of* Trident on this OS, and Trident cannot be re-configured (see [`docs/MAINTAINING.md`](docs/MAINTAINING.md) § *IE-adaptation is closed*). | A **native document engine** is being built in `BrowserForWP.Core/Engine/Native`. It fetches a page over the app's own TLS 1.3 transport — the only path in this product that can load anything above TLS 1.2 — and parses a **declared subset** of HTML and CSS into a box tree. It does **not** execute JavaScript and never will; pages that need scripting are Trident's job, through the compatibility layer. Layout and rendering are the next phase; today the pipeline's output is visible under **Diagnostics → Parse current page**. |
 | **No backend** | — | Every component — crypto, TLS, DNS, polyfills, history, localization — runs entirely on the handset. No server, no proxy service, no telemetry. |
 
 > **On the on-device loopback proxy idea:** Windows AppContainers block
@@ -168,6 +169,14 @@ honest position rather than a boast:
   NIST AES-GCM), `tools/proto/w25519.mjs` (18 checks) and
   `tools/proto/tls13.mjs` (31 checks, completing real handshakes with Google,
   Cloudflare and example.com) all pass.
+- **A second engine exists, and only its front half.**
+  `BrowserForWP.Core/Engine/Native` fetches a page over the app's own TLS 1.3
+  transport and parses a declared subset of HTML and CSS into a box tree. It does
+  **not** execute JavaScript, and never will. There is no layout and no rendering
+  yet: the pipeline's output is text, printed under **Diagnostics → Parse current
+  page**. Its behaviour is asserted by the prototypes that mirror it
+  (`tools/proto/htmlparse.mjs`, `csscascade.mjs`, `boxtree.mjs`) plus the guest
+  build; like everything else here, it has never been run on a handset.
 - **It has never run on a phone.** XAML layout, WebView behaviour and
   performance on 2014 hardware are unverified. Compiling is not running.
 - **The compatibility bundle has limits, and they are architectural.** It is

@@ -153,6 +153,24 @@
   <data name="ProbeNotRun" xml:space="preserve">
     <value>No answer from the page: it is still loading, or this engine cannot run scripts.</value>
   </data>
+  <data name="ParseThisPage" xml:space="preserve">
+    <value>Parse current page</value>
+  </data>
+  <data name="ParseNoDocument" xml:space="preserve">
+    <value>Nothing to parse: the tab has no address, or the response was not HTML.</value>
+  </data>
+  <data name="ParseFailed" xml:space="preserve">
+    <value>Fetch failed.</value>
+  </data>
+  <data name="ParseBoxCount" xml:space="preserve">
+    <value>boxes: </value>
+  </data>
+  <data name="IeModeCheck" xml:space="preserve">
+    <value>Check IE mode</value>
+  </data>
+  <data name="IeModeReport" xml:space="preserve">
+    <value>document mode: </value>
+  </data>
   <data name="DiagnosticsClose" xml:space="preserve">
     <value>Close</value>
   </data>

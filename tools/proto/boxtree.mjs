@@ -99,6 +99,36 @@ check('dump shows text content', dump(build(el('body', style('block'), [text('a'
 check('dump indents children',
   dump(build(el('body', style('block'), [el('p', style('block'), [])]))).includes('\n  b p'));
 
+// ── wiring parity (Task 8) ──────────────────────────────────────────────────
+const xaml = readIfPresent('BrowserForWP/MainPage.xaml');
+const main = readIfPresent('BrowserForWP/MainPage.xaml.vb');
+const enRes = readIfPresent('BrowserForWP/Strings/en-US/Resources.resw');
+const itRes = readIfPresent('BrowserForWP/Strings/it-IT/Resources.resw');
+
+check('the diagnostics view has a parse button', xaml.includes('ParsePageButton'));
+check('the parse handler exists', main.includes('ParsePageButton_Click'));
+check('the result block exists', xaml.includes('ParseResult'));
+check('the handler uses the TLS 1.3 fetcher', main.includes('NetDocumentFetcher'));
+check('the handler runs the pipeline', main.includes('BuildPage'));
+check('the handler dumps the tree', main.includes('DocumentDumper'));
+check('the handler reads <style> text', main.includes('InlineStyleText'));
+for (const key of ['ParseThisPage', 'ParseNoDocument', 'ParseFailed', 'ParseBoxCount']) {
+  check(`${key} in en-US`, enRes.includes(`name="${key}"`));
+  check(`${key} in it-IT`, itRes.includes(`name="${key}"`));
+}
+
+// The IE-mode instrument is required by this plan's Task 1: without a control in
+// the diagnostics view, IeModeProbe ships unreachable and the record in
+// MAINTAINING.md promises a measurement path that does not exist.
+check('the diagnostics view has an IE mode button', xaml.includes('IeModeButton'));
+check('the IE mode result block exists', xaml.includes('IeModeResult'));
+check('the IE mode handler exists', main.includes('IeModeButton_Click'));
+check('the IE mode handler uses the probe', main.includes('IeModeProbe'));
+for (const key of ['IeModeCheck', 'IeModeReport']) {
+  check(`${key} in en-US`, enRes.includes(`name="${key}"`));
+  check(`${key} in it-IT`, itRes.includes(`name="${key}"`));
+}
+
 // ── VB file parity (BoxTreeBuilder) ─────────────────────────────────────────
 const builder = readIfPresent('BrowserForWP.Core/Engine/Native/BoxTreeBuilder.vb');
 check('BoxTreeBuilder.vb exists', builder.length > 0);

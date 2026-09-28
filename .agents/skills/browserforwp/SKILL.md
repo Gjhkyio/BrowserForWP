@@ -160,6 +160,10 @@ verified if you skipped its command.
 | Test vectors themselves | `node tools/gen-vectors.mjs` | every line prefixed `✓`, exit code 0 |
 | The vector emitter itself | `node tools/gen-vectors.mjs` | `emitted VB braces balanced`, else it refuses to write, exit code 1 |
 | `BrowserForWP.Core/` logic | `node tools/proto/core-logic.mjs` | `core-logic checks, 0 failure(s)` (53 assertions) |
+| `Engine/Native/IDocumentFetcher.vb` / fetch rules | `node tools/proto/fetch-rules.mjs` | `25/25 checks passed` |
+| `Engine/Native/Html*.vb` | `node tools/proto/htmlparse.mjs` | `30/30 checks passed` |
+| `Engine/Native/CssParser.vb` / `SelectorMatcher.vb` | `node tools/proto/csscascade.mjs` | `47/47 checks passed` |
+| `Engine/Native/{Style,UserAgent,BoxTree}*.vb`, `DocumentDumper.vb`, or the diagnostics wiring | `node tools/proto/boxtree.mjs` | `39/39 checks passed` |
 | UA table / settings | `node tools/proto/useragents.mjs` | `0 failure(s)` |
 | Tracker blocklist | `node tools/proto/trackerblock.mjs` | `0 failure(s)` |
 | Lite defaults / caps / resources | `node tools/proto/lightweight.mjs` | `0 failure(s)` |
@@ -218,6 +222,9 @@ BrowserForWP/                 ← the WP8.1 app: XAML UI, assets, UI strings
 BrowserForWP.Core/            ← engine abstraction, tabs, history, address bar,
                                  settings/history/favourites stores, reading and
                                  night modes, tracker blocklist, lite redirects
+  Engine/Native/              ← the native document engine: IDocumentFetcher seam,
+                                 HTML tokenizer + tree builder, CSS parser,
+                                 selector matcher, cascade, box tree
 BrowserForWP.Net/             ← TLS 1.3, DoH, HTTP client, certificate pin store
 BrowserForWP.Crypto/          ← HKDF, X25519, AES-GCM (no ChaCha: one suite, see below)
 BrowserForWP.Localization/    ← language resolution + string lookup
@@ -230,9 +237,10 @@ tools/gen-vectors.mjs         ← crypto verification + the VB vector emitter
 tools/proto/*.mjs             ← runnable prototypes and logic mirrors
                                  (w25519, tls13, core-logic, pinstore, useragents,
                                  trackerblock, lightweight, modern-sites,
-                                 shell-guards)
+                                 shell-guards, ie-adapt, probe-verdict,
+                                 fetch-rules, htmlparse, csscascade, boxtree)
 tools/make_logo.py            ← regenerates every image asset
-tools/check-vb.mjs            ← 12 categories / 50 check groups of static
+tools/check-vb.mjs            ← 12 categories / 62 check groups of static
                                  VB/XAML/project/resw checks
 tools/check-polyfill.mjs      ← ES5 validity of the shim
 tools/vm-build.cmd            ← the real build, run inside the Windows guest

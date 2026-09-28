@@ -153,6 +153,24 @@
   <data name="ProbeNotRun" xml:space="preserve">
     <value>Nessuna risposta dalla pagina: è ancora in caricamento, oppure questo motore non esegue script.</value>
   </data>
+  <data name="ParseThisPage" xml:space="preserve">
+    <value>Analizza la pagina corrente</value>
+  </data>
+  <data name="ParseNoDocument" xml:space="preserve">
+    <value>Niente da analizzare: la scheda non ha indirizzo, oppure la risposta non è HTML.</value>
+  </data>
+  <data name="ParseFailed" xml:space="preserve">
+    <value>Recupero non riuscito.</value>
+  </data>
+  <data name="ParseBoxCount" xml:space="preserve">
+    <value>box: </value>
+  </data>
+  <data name="IeModeCheck" xml:space="preserve">
+    <value>Controlla modalità IE</value>
+  </data>
+  <data name="IeModeReport" xml:space="preserve">
+    <value>modalità documento: </value>
+  </data>
   <data name="DiagnosticsClose" xml:space="preserve">
     <value>Chiudi</value>
   </data>

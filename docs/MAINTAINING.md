@@ -70,6 +70,27 @@ node tools/proto/useragents.mjs      # UA table and search-URL escaping
 node tools/proto/lightweight.mjs     # lite defaults, caps, resource keys
 node tools/proto/modern-sites.mjs    # shim markers, redirect rules, delivery wiring
 
+# The native document engine. These four are prototypes AND referees: the VB in
+# BrowserForWP.Core/Engine/Native/ is a hand transliteration of them, so when one
+# fails, first prove the check is right before "fixing" the VB. Between them they
+# have already rejected a CORRECT implementation three times -- a check that read
+# comments and so forbade documenting the rule it enforced, an assertion that had
+# dropped a child and so expected 2 where there are 3, and a mirror that tested
+# source text where the rule was about behaviour.
+node tools/proto/fetch-rules.mjs     # fetch rules: charset, media type, no Accept-Encoding
+node tools/proto/htmlparse.mjs       # tokenizer + tree builder, implicit head/body
+node tools/proto/csscascade.mjs      # CSS parse, specificity, matching, cascade, lengths
+node tools/proto/boxtree.mjs         # box tree, anonymous blocks, diagnostics wiring
+
+# The IE-adaptation decision record. Not a logic mirror: it asserts that
+# IeModeProbe.vb exists, stays ES5 and reads documentMode, and that this file still
+# records the four levers that make re-configuring Trident impossible.
+node tools/proto/ie-adapt.mjs
+
+# The probe verdict rule. It exists because an empty MissingFeatures list from a
+# probe that never ran was rendered in the UI as "no missing web features detected".
+node tools/proto/probe-verdict.mjs
+
 # Confirm the polyfill shim is valid ES5 (comment-aware, so it does not
 # false-positive on backticks inside comments).
 node tools/check-polyfill.mjs
@@ -183,6 +204,30 @@ already covers the need.
 When adding a capability flag, set it to what the engine **actually** does.
 `TridentEngine` claiming `SupportsTls13 = True` would be a lie that the UI then
 repeats to the user — see the guard in the plan's Task 11, Step 3.
+
+### The native document engine
+
+`BrowserForWP.Core/Engine/Native/` is a second engine, built from scratch, whose
+**front half** exists: fetch, tokenize, build the tree, parse CSS, match
+selectors, resolve the cascade, build a box tree. Layout and rendering are Phase 2
+and are not written. It executes no JavaScript, and never will.
+
+Two rules apply, and both are enforced by prototypes rather than by inspection:
+
+- **Change the prototype first.** `tools/proto/htmlparse.mjs`,
+  `csscascade.mjs` and `boxtree.mjs` are executable specifications; the VB is a
+  hand transliteration of them, because nothing in this environment executes VB.
+  Change the `.mjs`, watch it pass, then port.
+  `Engine/Native/NodeTypes.vb` is the vocabulary both sides share — rename a type
+  there and the mirrors must follow in the same commit, and vice versa.
+- **`Engine/Native/` must not reference `BrowserForWP.Net`.** Fetching is a seam
+  (`IDocumentFetcher`) that the app layer implements
+  (`BrowserForWP/Diagnostics/NetDocumentFetcher.vb`). That is what keeps Core free
+  of the transport, and what makes the engine exercisable without a network.
+
+Adding a stage means adding its mirror in the same commit. A stage with no mirror
+has no way to fail before a handset run, and this pipeline's defects have so far
+been found by execution, never by reading.
 
 ## Build host requirements
 

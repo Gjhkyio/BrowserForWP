@@ -25,6 +25,7 @@ sistema, non un limite delle ambizioni di questo progetto.
 | **TLS 1.3** | Schannel su WP8.1 si ferma a **TLS 1.2** e il sistema non espone alcuna API per alzare il limite. | **Implementato dalle RFC, in codice gestito, sul dispositivo**: un client TLS 1.3 completo (`BrowserForWP.Net`) che gira su un `StreamSocket` grezzo, così il livello di rete dell'app parla TLS 1.3 già oggi. |
 | **HTTPS moderno** | La `WebView` di sistema negozia ciò che Schannel supporta. | `Tls13Client` + resolver DNS-over-HTTPS + pinning dei certificati per il livello di trasporto dell'app. |
 | **Pagine web moderne** | IE11 non riesce a interpretare né a eseguire il JavaScript moderno. | Un bundle di compatibilità ES5 sul dispositivo (`BrowserForWP.Polyfill`) iniettato a `DOMContentLoaded` e di nuovo al completamento, più una diagnostica che spiega *perché* un sito ha fallito. Il bundle alza il livello minimo ma non può interpretare la sintassi ES6 né fornire `Proxy`/`Intl`/grid — vedi l'elenco qui sotto. |
+| **Un motore da zero** | Su questo sistema non si può costruire un motore *al posto di* Trident, e Trident non è riconfigurabile (vedi [`docs/MAINTAINING.md`](docs/MAINTAINING.md), sezione *IE-adaptation is closed*). | Un **motore di documenti nativo** è in costruzione in `BrowserForWP.Core/Engine/Native`. Recupera una pagina attraverso il trasporto TLS 1.3 dell'app — l'unico percorso di questo prodotto che può caricare qualcosa sopra TLS 1.2 — e analizza un **sottoinsieme dichiarato** di HTML e CSS producendo un albero di box. **Non esegue JavaScript** e mai lo farà; le pagine che richiedono script restano compito di Trident, tramite il livello di compatibilità. Il layout e il disegno sono la fase successiva; oggi l'output della pipeline è visibile in **Diagnostica → Analizza la pagina corrente**. |
 | **Nessun backend** | — | Ogni componente — crittografia, TLS, DNS, polyfill, cronologia, localizzazione — gira interamente sul telefono. Nessun server, nessun servizio proxy, nessuna telemetria. |
 
 > **Sull'idea del proxy locale sul dispositivo:** i Windows AppContainer
@@ -180,6 +181,15 @@ invece che un vanto:
   5869/7748/8439/8448 e NIST AES-GCM), `tools/proto/w25519.mjs` (18 controlli) e
   `tools/proto/tls13.mjs` (31 controlli, con handshake reali verso Google,
   Cloudflare ed example.com).
+- **Esiste un secondo motore, ma solo la sua prima metà.**
+  `BrowserForWP.Core/Engine/Native` recupera una pagina attraverso il trasporto
+  TLS 1.3 dell'app e analizza un sottoinsieme dichiarato di HTML e CSS
+  producendo un albero di box. **Non esegue JavaScript**, e mai lo farà. Non
+  esistono ancora né layout né disegno: l'output della pipeline è testo, stampato
+  in **Diagnostica → Analizza la pagina corrente**. Il suo comportamento è
+  verificato dai prototipi che lo rispecchiano (`tools/proto/htmlparse.mjs`,
+  `csscascade.mjs`, `boxtree.mjs`) più la build nella VM; come tutto il resto,
+  non è mai stato eseguito su un telefono.
 - **Non è mai stato eseguito su un telefono.** Layout XAML, comportamento del
   WebView e prestazioni su hardware del 2014 non sono verificati. Compilare non
   significa eseguire.
