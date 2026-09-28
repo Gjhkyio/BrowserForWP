@@ -98,9 +98,10 @@ node tools/check-polyfill.mjs
 # Static VB.NET structural check. Must print "0 finding(s)", exit code 0.
 # This is NOT a compiler. It catches block-balance errors, missing Implements
 # members, project/disk drift, namespace mismatch, resw key drift, unwired XAML
-# handlers and {ThemeResource} keys the platform does not define — and it found
-# a real End Property/End Class error. A green run still does not mean the
-# project compiles.
+# handlers, {ThemeResource} keys the platform does not define and project flavour
+# GUIDs that disagree with the target platform — and it found a real
+# End Property/End Class error. A green run still does not mean the project
+# compiles.
 node tools/check-vb.mjs
 
 # Regenerate the theme-resource key list that check-vb.mjs group 9 reads: the
@@ -333,7 +334,7 @@ Approximately 78 errors, but they were the product of two defects:
 | `The property "Content" can only be set once. MainPage.xaml (1,1)` | `MainPage.xaml` had **two direct children of `<Page>`** (the layout grid and the settings overlay). `Page.Content` can hold one object. | Wrapped both in a single root `<Grid>`; the overlay is declared second so it still draws on top. |
 | `'Sub Main' was not found`, `'InitializeComponent' is not declared`, and ~65 × `'<Name>' is not declared` | **Consequences of the first row.** The XAML compiler rejected `MainPage.xaml`, so `MainPage.g.vb` was never generated — no partial class, therefore no `x:Name` fields and no generated entry point. | Same fix. |
 | `Value '128274' cannot be converted to 'Char'` (×2) | `ChrW(&H1F512)` / `ChrW(&H1F513)`. Those are supplementary-plane code points; a `Char` is 16 bits. | `Char.ConvertFromUtf32`. |
-| `'Localization' is not declared`; `Type 'IBrowserEngine' / 'BrowserSession' / 'TridentEngine' is not defined`; `The referenced component 'BrowserForWP.Core' / '.Crypto' / '.Localization' could not be found` | The three library projects produced no referenceable assembly. Likely because they declared no `TargetPlatformIdentifier`, so a WP8.1 app cannot resolve them as references. | Added `<TargetPlatformIdentifier>WindowsPhoneApp</TargetPlatformIdentifier>` to all four library projects. |
+| `'Localization' is not declared`; `Type 'IBrowserEngine' / 'BrowserSession' / 'TridentEngine' is not defined`; `The referenced component 'BrowserForWP.Core' / '.Crypto' / '.Localization' could not be found` | **CORRECTED in Round 6 — the diagnosis written in this row was wrong.** The libraries did produce referenceable assemblies: they compile, and their output is present for all six configurations. The "declared no `TargetPlatformIdentifier`" explanation cannot hold either, because each file already set that value in the conditional `PropertyGroup` at its foot, so the line this row credits changed no build. The `could not be found` family is emitted by the IDE's project system, which compares project **flavour GUIDs**: the libraries carried the Windows Store flavour while the app carried the Windows Phone 8.1 one. | `<TargetPlatformIdentifier>WindowsPhoneApp</TargetPlatformIdentifier>` was added to all four library projects. It is a no-op, kept as documentation. The fix that actually removes the warnings is the flavour swap in Round 6. |
 | `Impossibile trovare il percorso specificato.` (no file attributed) | A project-level build step failed. Building over a Parallels **shared folder** is the prime suspect: MSBuild and the XAML/PRI compiler are unreliable on that path. | **Copy the repository to local disk in the guest and build there.** |
 
 **The lesson worth keeping:** the two defects in rows 1 and 3 were the whole
@@ -776,6 +777,103 @@ Families actually observed, in order of how misleading they are:
   `BrowserForWP.Net.vbproj` must keep `BrowserForWP.Net` because its sources
   import `BrowserForWP.Net.Tls13` and `BrowserForWP.Net.Http`.
 
+### Round 6 — the flavour GUID behind four IDE warnings
+
+**Reported:** four warnings in the Visual Studio error list, all attributed to the
+app project, none of them with a diagnostic code.
+
+```
+The referenced component 'BrowserForWP.Core' could not be found.
+The referenced component 'BrowserForWP.Crypto' could not be found.
+The referenced component 'BrowserForWP.Net' could not be found.
+The referenced component 'BrowserForWP.Localization' could not be found.
+```
+
+**What was ruled out.** The four `<ProjectReference>` items are well formed:
+existing paths, `<Project>` GUIDs matching each library's own `<ProjectGuid>`,
+`<Name>` equal to each `<AssemblyName>`. Every referenced project is in the
+solution with `ActiveCfg` and `Build.0` for all six configurations, and each
+library's `bin` output exists for all six. A `Rebuild` is `BUILD_EXIT=0` in all
+six configurations — the four `ARM`/`x86` ones as solution builds, the two
+`Any CPU` ones as project builds, since that solution platform's name contains a
+space and cannot survive `prlctl exec`. Nothing is missing, so the message is not
+about absence.
+
+**What the message is.** Not a compiler diagnostic. Every other failure in this
+file carries a code (`BC30456`, `MSB4078`, `APPX1621`); this one carries none,
+which places it in the IDE's project system rather than in `vbc`. The string
+"referenced component" does not occur anywhere under
+`C:\Program Files (x86)\MSBuild`, under the Windows Phone 8.1 SDK, or under
+`C:\Program Files (x86)\Windows Kits\8.1` on the guest. **No build on this project
+could ever have printed it**, which is why `tools/vm-build.cmd` stayed green
+through every round the warning was present.
+
+**The cause.** The first GUID in `ProjectTypeGuids` is the project *flavour*, and
+a Windows Phone 8.1 app may only resolve references to a project of the same
+flavour. The four libraries — and both test libraries — declared
+`{BC8A1FFA-BEE3-4634-8014-F334798102B3}` while also declaring
+`TargetPlatformIdentifier` `WindowsPhoneApp`. The two statements contradict each
+other, and the project system reads the GUID.
+
+That GUID is not a guess and neither is the replacement. Both values come from
+the VS2013 templates in the guest:
+
+| Template, under `Common7\IDE\ProjectTemplates\VisualBasic\` | Flavour GUID |
+| --- | --- |
+| `Windows Phone 8.1\1033\WindowsPhoneClassLibrary\ClassLibrary.vbproj` | `{76F1466A-8B6D-4E39-A767-685A06062A39}` |
+| `Windows Phone 8.1\1033\WindowsPhoneBlankApplication\Application.vbproj` | `{76F1466A-8B6D-4E39-A767-685A06062A39}` |
+| `Windows Store\1033\ClassLibrary_WindowsStoreApps\ClassLibrary.vbproj` | `{BC8A1FFA-BEE3-4634-8014-F334798102B3}` |
+
+The app template and the Windows Phone 8.1 class library template agree, and
+these project files carried the value from the third row. `MSBuild` never reads
+`ProjectTypeGuids`, which is exactly why this survived five rounds of green guest
+builds.
+
+`BrowserForWP.sln` states a project type GUID per project too, and it disagreed
+the same way: `{BC8A1FFA-...}` for the six libraries, `{F184B08F-...}` — the plain
+VB language GUID — for the app. Which of the two statements the IDE acts on was
+settled by looking at what is registered:
+
+```
+reg query "HKLM\SOFTWARE[\WOW6432Node]\Microsoft\VisualStudio\12.0" /s /f "<guid>"
+```
+
+Only `{F184B08F-C81C-45F6-A57F-5ABD9991F28F}` is registered there, as the VB
+project factory (under `Projects` and `LocalData`). Neither flavour GUID appears
+anywhere in the VS2013 hive, so a `.sln` entry cannot select a Store or Phone
+factory on its own and the project file is what the loader falls back to. That
+makes the `.sln` a consistency fix rather than the cure; it is made anyway, because
+a solution that calls a Windows Phone project a Windows Store one is the trap that
+produced the defect in the first place.
+
+**Fixed** by swapping the flavour GUID in `BrowserForWP.Core`, `.Crypto`,
+`.Localization`, `.Net` and both test libraries, and in the seven `Project`
+entries of `BrowserForWP.sln`, so both files say `{76F1466A-...}` everywhere. The
+four comments that credited the `TargetPlatformIdentifier` line with making the
+project resolvable were wrong and are corrected; the line itself is kept, because
+it agrees with the conditional `PropertyGroup` at the foot of each file, and it
+now says why it is there.
+
+**Enforced** by group 14 of `tools/check-vb.mjs`: a project that declares
+`TargetPlatformIdentifier` `WindowsPhoneApp` must carry the Windows Phone 8.1
+flavour, the Windows Store flavour must not appear in any project here, and a
+`.sln` entry must carry the same flavour as its project. Against the reproduced
+pre-fix state the group is RED with 13 findings — six `.vbproj` and seven
+`BrowserForWP.sln` lines — and GREEN against these files. Its message quotes both
+template paths so the next reader can re-derive the rule instead of trusting it.
+
+**Noticed while measuring it:** the two solution platforms named `Any CPU` cannot
+be selected from the host with `/p:Platform="Any CPU"` — `prlctl exec` reaches
+`cmd.exe` as one string and MSBuild splits the argument at the space. Build the app
+project with `/p:Platform=AnyCPU` instead; the effect is the same, and that is how
+the two `Any CPU` configurations were checked. All six end in `BUILD_EXIT=0`,
+carrying only the two deliberate `ResourceLoader` warnings.
+
+**What this does not prove.** The diagnostic itself cannot be reproduced off the
+IDE, because the project system is the component that emits it. The evidence for
+the fix is the template comparison above, which is objective and re-runnable, and
+not a before/after screenshot of an error list.
+
 ## The loop
 
 Every change follows five steps, in order. The canonical version lives in
@@ -807,7 +905,7 @@ What is and is not covered:
 | `tests/BrowserForWP.Crypto.Tests/` (`Vectors.generated.vb` + `VectorsSmokeTests.vb`) | Generated VB constants from those same vectors, plus length/shape checks. | **Compiled by the guest build; never executed.** |
 | `tests/BrowserForWP.Core.Tests/CoreLogicTests.vb` | Address normalisation, tab state, session/UA, settings, history, favourites, pin normalisation, hostname wildcards, language matching. | **Compiled by the guest build; never executed.** |
 | `tools/proto/core-logic.mjs` | A transliteration of `CoreLogicTests.vb`. 53 assertions, exit 1 on failure. | `node`, on any machine. **This is what actually runs those assertions.** |
-| `tools/check-vb.mjs` | 13 categories / 63 check groups over every `.vb`, `.vbproj`, `.xaml` and `.resw`, including every `{ThemeResource}` key. | `node`, on any machine. |
+| `tools/check-vb.mjs` | 14 categories / 64 check groups over every `.vb`, `.vbproj`, `.xaml` and `.resw`, including every `{ThemeResource}` key and every project's flavour GUID. | `node`, on any machine. |
 | `tools/wp81-theme-keys.sh` | Regenerates `tools/wp81-theme-keys.txt`, the 523 theme-resource keys Windows Phone 8.1 defines, read from the guest's design dictionaries. | `bash`, with the guest reachable. |
 | `tools/vm-build.cmd` | The real compiler, and the arbiter of pass/fail. | The Windows guest. |
 | `tools/wmc9999-probe.sh` | Build-diagnostic characterisation and XAML output invariance. | `bash`, on the host. |

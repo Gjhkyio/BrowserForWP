@@ -93,6 +93,24 @@ regenerated with `bash tools/wp81-theme-keys.sh`); declare app-local keys in
 and shipped because a previous round swapped a *working* key for it and misread an
 intermittent `WMC9999` as proof — see `docs/MAINTAINING.md` Round 4.
 
+**Second-and-fifteen-sixteenths — the first GUID in `ProjectTypeGuids` is the
+project *flavour*, and only the IDE's project system reads it.** A Windows Phone
+8.1 app can resolve a reference only to a project of the same flavour, so every
+project here must carry `{76F1466A-8B6D-4E39-A767-685A06062A39}` — the value both
+the Windows Phone 8.1 app template and the Windows Phone 8.1 class library
+template write. `{BC8A1FFA-BEE3-4634-8014-F334798102B3}` is the **Windows Store**
+library flavour, and the libraries here carried it for five rounds while declaring
+`TargetPlatformIdentifier` `WindowsPhoneApp`. The error list then says
+`The referenced component 'BrowserForWP.Core' could not be found.` for a project
+that is present, correct and already built, and **no build can contradict it**:
+`MSBuild` never reads `ProjectTypeGuids`, and the string does not exist anywhere
+under `MSBuild`, the Windows Phone 8.1 SDK or `Windows Kits\8.1` in the guest.
+A diagnostic with no `BC`/`MSB`/`APPX` code is the tell that the build is not the
+component speaking. Flavour is now checked by `tools/check-vb.mjs` group 14; the
+authoritative values are the VS2013 templates under
+`Common7\IDE\ProjectTemplates\VisualBasic\` in the guest — compare against those
+rather than editing a GUID until a warning disappears (see Round 6).
+
 **Third — never edit `X25519.vb` or `BrowserForWP.Net/Tls13/` by hand.** Both
 are transliterations of executable prototypes, and those prototypes are the only
 real checks available off-Windows. Change the prototype first, watch it pass, then
@@ -185,6 +203,7 @@ verified if you skipped its command.
 | `BrowserForWP.Polyfill/compat.js` | `node tools/check-polyfill.mjs` | `is valid ES5` |
 | Any `.vb`, `.vbproj`, `.xaml` or `.resw` | `node tools/check-vb.mjs` | `0 finding(s)`, exit code 0 |
 | A `{ThemeResource}` key in XAML | `node tools/check-vb.mjs` | `0 finding(s)`; group 9 checks every key against `tools/wp81-theme-keys.txt` |
+| Any `.vbproj` `ProjectTypeGuids` | `node tools/check-vb.mjs` | `0 finding(s)`; group 14 requires the Windows Phone 8.1 flavour GUID wherever `TargetPlatformIdentifier` is `WindowsPhoneApp` |
 | The theme-key oracle itself | `bash tools/wp81-theme-keys.sh` | `wrote .../tools/wp81-theme-keys.txt (523 keys)` |
 | `BrowserForWP/Assets/**` | `python3 tools/make_logo.py` | one line per generated PNG, exit code 0 |
 | UI / XAML / VB app code | Build in the guest: `tools\vm-build.cmd /t:Rebuild` | `BUILD_EXIT=0`, no `BC` errors; only the two deliberate `ResourceLoader` warnings |
@@ -253,8 +272,8 @@ tools/proto/*.mjs             ← runnable prototypes and logic mirrors
                                  shell-guards, ie-adapt, probe-verdict,
                                  fetch-rules, htmlparse, csscascade, boxtree)
 tools/make_logo.py            ← regenerates every image asset
-tools/check-vb.mjs            ← 13 categories / 63 check groups of static
-                                 VB/XAML/project/resw/theme-key checks
+tools/check-vb.mjs            ← 14 categories / 64 check groups of static
+                                 VB/XAML/project/resw/theme-key/flavour checks
 tools/check-polyfill.mjs      ← ES5 validity of the shim
 tools/wp81-theme-keys.sh      ← regenerates the phone's 523 theme-resource keys
                                  (guest-side) into tools/wp81-theme-keys.txt,
@@ -415,6 +434,11 @@ Same loop, but the diagnosis comes first.
   `tools/wp81-theme-keys.txt`, or "fixing" any build diagnostic by renaming a
   platform key. A working key was once swapped for a UWP name that way, and the
   page's brush stopped resolving.
+- "Fixing" `The referenced component '…' could not be found.` by adding or moving
+  `TargetPlatformIdentifier`, or by asserting a code defect. It is the project
+  system reporting a project **flavour** mismatch (`ProjectTypeGuids`), the line
+  it needs is not an MSBuild property, and a green `tools/vm-build.cmd` proves
+  nothing about it either way.
 - Reporting the `tests/` projects as passing, or claiming `BrowserForWP.Core` is
   covered because they compile. `node tools/proto/core-logic.mjs` is what runs.
 - Implying the `WebView`'s own traffic is pinned, or that it ever uses TLS 1.3.
