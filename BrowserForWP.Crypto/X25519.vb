@@ -82,9 +82,12 @@ Namespace Crypto
                 Throw New ArgumentException("peer public key must be 32 bytes", "peerPublic")
             End If
 
-            Dim shared = ScalarMult(privateKey, peerPublic)
-            For Each b In shared
-                If b <> 0 Then Return shared
+            ' The variable must not be named `shared`: Shared is a VB keyword, and
+            ' `Dim shared = ...` is a hard syntax error (BC30203 "identifier
+            ' expected"), not a shadowing warning.
+            Dim sharedSecret = ScalarMult(privateKey, peerPublic)
+            For Each b In sharedSecret
+                If b <> 0 Then Return sharedSecret
             Next
             Throw New InvalidOperationException("X25519 produced a degenerate shared secret (low-order public key)")
         End Function
@@ -133,15 +136,15 @@ Namespace Crypto
                 ' these vectors rather than trusting the transcription.
                 Dim a = Field.Add(x2, z2)
                 Dim aa = Field.Mul(a, a)
-                Dim b = Field.Sub(x2, z2)
+                Dim b = Field.Subtract(x2, z2)
                 Dim bb = Field.Mul(b, b)
-                Dim e = Field.Sub(aa, bb)
+                Dim e = Field.Subtract(aa, bb)
                 Dim c = Field.Add(x3, z3)
-                Dim d = Field.Sub(x3, z3)
+                Dim d = Field.Subtract(x3, z3)
                 Dim da = Field.Mul(d, a)
                 Dim cb = Field.Mul(c, b)
                 Dim daPlus = Field.Add(da, cb)
-                Dim daMinus = Field.Sub(da, cb)
+                Dim daMinus = Field.Subtract(da, cb)
                 x3 = Field.Mul(daPlus, daPlus)
                 z3 = Field.Mul(x1, Field.Mul(daMinus, daMinus))
                 x2 = Field.Mul(aa, bb)
@@ -295,7 +298,12 @@ Namespace Crypto
                 Return h
             End Function
 
-            Friend Shared Function Sub(a As Long(), b As Long()) As Long()
+            ''' <summary>
+            ''' Subtraction. Deliberately named Subtract and not Sub: Sub is a VB
+            ''' keyword, and a method named Sub is reported as BC30183 "invalid
+            ''' keyword as identifier".
+            ''' </summary>
+            Friend Shared Function Subtract(a As Long(), b As Long()) As Long()
                 Dim h(Limbs - 1) As Long
                 For i As Integer = 0 To Limbs - 1
                     h(i) = a(i) + SubOffset(i) - b(i)

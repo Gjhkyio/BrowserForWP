@@ -79,8 +79,13 @@ Public NotInheritable Class MainPage
     Private Sub PopulateLanguagePicker()
         LanguagePicker.Items.Clear()
         LanguagePicker.Items.Add(Localizer.Get("LanguageAutomatic"))
-        For Each tag In LanguageCatalog.Supported
-            LanguagePicker.Items.Add(LanguageCatalog.DisplayName(tag))
+
+        ' The loop variable must not be named `tag`: Page exposes a `Tag` property
+        ' and VB is case-insensitive, so `For Each tag In ...` is rejected with
+        ' BC30039 ("the loop control variable cannot be a property"). Same class of
+        ' mistake as LanguageCatalog's `supported`/`Default`.
+        For Each supportedTag As String In LanguageCatalog.Supported
+            LanguagePicker.Items.Add(LanguageCatalog.DisplayName(supportedTag))
         Next
         LanguagePicker.SelectedIndex = If(Localizer.IsOverridden, 1, 0)
     End Sub

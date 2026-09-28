@@ -153,6 +153,20 @@ Namespace Tls13
         Public Function SubReaderVec16() As TlsReader
             Return New TlsReader(ReadVec16())
         End Function
+
+        ''' <summary>
+        ''' A sub-reader over the next 3-byte length-prefixed block.
+        '''
+        ''' Needed for Certificate (§4.4.2), whose certificate_list is
+        ''' `opaque certificate_list&lt;0..2^24-1&gt;`. SubReaderVec16 alone is not
+        ''' enough there, and the missing member is reported at the CALL site as
+        ''' "'SubReaderVec24' is not a member of 'TlsReader'" followed by a wall of
+        ''' late-binding errors, because the value it should have returned has no
+        ''' type. Keep the two in step.
+        ''' </summary>
+        Public Function SubReaderVec24() As TlsReader
+            Return New TlsReader(ReadVec24())
+        End Function
     End Class
 
     ''' <summary>

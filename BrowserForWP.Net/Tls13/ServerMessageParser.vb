@@ -55,6 +55,20 @@ Namespace Tls13
         End Function
     End Class
 
+    ''' <summary>Parsed CertificateVerify (RFC 8446 §4.4.3).</summary>
+    '''
+    ''' Declared at namespace level, NOT nested inside ServerMessageParser.
+    ''' ServerHelloInfo already lives here, and
+    ''' CertificateValidator.VerifyCertificateVerify names this type in its own
+    ''' parameter list. While it was nested, that reference resolved to nothing
+    ''' and reported the misleading BC30002 "Type 'CertificateVerifyInfo' is not
+    ''' defined" — in a different file, with no mention of the nesting.
+    Public NotInheritable Class CertificateVerifyInfo
+
+        Public Property Scheme As Integer
+        Public Property Signature As Byte()
+    End Class
+
     ''' <summary>Parses the server's handshake messages.</summary>
     Public NotInheritable Class ServerMessageParser
 
@@ -76,10 +90,16 @@ Namespace Tls13
 
             Dim extensions = reader.SubReaderVec16()
             While extensions.Remaining > 0
-                Dim extensionType = extensions.ReadU16()
+                ' NOT `extensionType`: VB is case-insensitive, so a local named
+                ' extensionType SHADOWS the ExtensionType enum, and every
+                ' CInt(ExtensionType.X) below is then reported as "'X' is not a
+                ' member of 'Integer'" — which points at the enum, not at the
+                ' local that caused it. Same trap as supported/Supported,
+                ' tag/Tag and Default/DefaultTag.
+                Dim extType = extensions.ReadU16()
                 Dim extensionBody = extensions.ReadVec16()
 
-                Select Case extensionType
+                Select Case extType
                     Case CInt(ExtensionType.SupportedVersions)
                         info.SelectedVersion = New TlsReader(extensionBody).ReadU16()
 
@@ -102,8 +122,8 @@ Namespace Tls13
             Return info
         End Function
 
-        ''' <summary>Parsed EncryptedExtensions (RFC 8446 §4.3.1).</summary>
-        Public NotInheritable Class EncryptedExtensionsInfo
+    ''' <summary>Parsed EncryptedExtensions (RFC 8446 §4.3.1).</summary>
+    Public NotInheritable Class EncryptedExtensionsInfo
 
             ''' <summary>The negotiated ALPN protocol, or Nothing when none was agreed.</summary>
             Public Property Alpn As String
@@ -114,10 +134,10 @@ Namespace Tls13
             Dim info As New EncryptedExtensionsInfo()
 
             While extensions.Remaining > 0
-                Dim extensionType = extensions.ReadU16()
+                Dim extType = extensions.ReadU16()
                 Dim extensionBody = extensions.ReadVec16()
 
-                If extensionType = CInt(ExtensionType.Alpn) Then
+                If extType = CInt(ExtensionType.Alpn) Then
                     ' ProtocolNameList = uint16 list_length, ProtocolName*
                     ' ProtocolName     = uint8 name_length, bytes
                     Dim list = New TlsReader(extensionBody).ReadVec16()
@@ -142,7 +162,10 @@ Namespace Tls13
                     "first Certificate message is supported")
             End If
 
-            Dim certificates As New List(Of Byte)()
+            ' List(Of Byte()): one entry per certificate, each entry the whole DER.
+            ' List(Of Byte) would not accept a DER here (BC30512 on Add and again
+            ' on Return).
+            Dim certificates As New List(Of Byte())()
             Dim list = reader.SubReaderVec24()
             While list.Remaining > 0
                 ' CertificateEntry = opaque cert_data<1..2^24-1>, Extension*
@@ -159,13 +182,6 @@ Namespace Tls13
             End If
             Return certificates
         End Function
-
-        ''' <summary>Parsed CertificateVerify (RFC 8446 §4.4.3).</summary>
-        Public NotInheritable Class CertificateVerifyInfo
-
-            Public Property Scheme As Integer
-            Public Property Signature As Byte()
-        End Class
 
         Public Shared Function ParseCertificateVerify(body As Byte()) As CertificateVerifyInfo
             Dim reader = New TlsReader(body)

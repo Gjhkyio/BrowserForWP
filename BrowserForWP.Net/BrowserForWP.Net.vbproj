@@ -1,8 +1,44 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  BrowserForWP.Net — Windows Phone 8.1 class library (TLS 1.3, DoH, HTTP/1.1).
+
+  This project file is deliberately line-for-line parallel with
+  BrowserForWP.Crypto.vbproj, which is the authoritative template: it is the
+  shape VS2013 writes for "Class Library (Windows Phone 8.1)". Read the comments
+  there before changing anything structural here.
+
+  WHAT WAS WRONG BEFORE (kept as a warning to future editors)
+  ===========================================================
+  This file originally had NO <Import Include="..."> ItemGroup and none of the
+  OptionStrict/OptionInfer/OptionCompare PropertyGroups, and it closed with
+  Microsoft.VisualBasic.targets rather than the XAML targets. Every source file
+  still parsed, so the failure looked like broken code rather than a broken
+  project: `IDisposable`, `List`, `ArgumentException`, `Math`, `Array` and
+  `InvalidOperationException` all reported "not defined", `Async`/`Await` raised
+  BC36948 on every method and `Throw` BC30665. Those are the names that come from
+  the implicit imports; without the ItemGroup they simply do not exist.
+
+  If you add a source file that uses a namespace not listed below, add an
+  <Import Include> for it here as well: file-level `Imports` statements cannot
+  substitute, because some of the failing names are used in files that never
+  import their namespace.
+
+  NOTE ON XML COMMENTS: do not draw rules out of repeated '-' characters in a
+  comment block. The sequence '-' '-' is illegal inside an XML comment and
+  MSBuild refuses to load the project at all, with MSB4025 on the comment's own
+  line. In a solution build the same fault surfaces as the far less helpful
+  MSB4078 ("project file is not supported by MSBuild and cannot be built").
+  Substitutions used here: '=' for rule lines, and ':' in prose.
+
+  With RootNamespace = BrowserForWP.Net, a file declaring `Namespace Tls13`
+  lands at BrowserForWP.Net.Tls13, which is what
+  `Imports BrowserForWP.Net.Tls13` in Http/HttpClient13.vb expects. Setting
+  RootNamespace to BrowserForWP (as Crypto does) would move every type one level
+  up and break those imports, so this project's root must include `.Net`.
+-->
 <Project ToolsVersion="12.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
   <PropertyGroup>
-    <MinimumVisualStudioVersion>12.0</MinimumVisualStudioVersion>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
     <ProjectGuid>{3B9E1C74-5A21-4F0E-9D8C-6E2A7B4F1D93}</ProjectGuid>
@@ -10,29 +46,88 @@
     <RootNamespace>BrowserForWP.Net</RootNamespace>
     <AssemblyName>BrowserForWP.Net</AssemblyName>
     <DefaultLanguage>en-US</DefaultLanguage>
+    <TargetPlatformVersion>8.1</TargetPlatformVersion>
+    <!-- Without this the project's target platform is unspecified, and a
+         Windows Phone 8.1 application cannot resolve it as a reference: the
+         build reports "The referenced component could not be found" and every
+         type it defines is then "not defined" in the referencing project. -->
+    <TargetPlatformIdentifier>WindowsPhoneApp</TargetPlatformIdentifier>
+    <MinimumVisualStudioVersion>12.0</MinimumVisualStudioVersion>
     <FileAlignment>512</FileAlignment>
     <ProjectTypeGuids>{BC8A1FFA-BEE3-4634-8014-F334798102B3};{F184B08F-C81C-45F6-A57F-5ABD9991F28F}</ProjectTypeGuids>
-    <TargetPlatformVersion>8.1</TargetPlatformVersion>
-    <!-- See BrowserForWP.Crypto.vbproj: without an explicit target platform this
-         library is not resolvable as a reference from a Windows Phone 8.1 app. -->
-    <TargetPlatformIdentifier>WindowsPhoneApp</TargetPlatformIdentifier>
-    <MinimumVisualStudioVersion>12</MinimumVisualStudioVersion>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
     <DebugType>full</DebugType>
+    <DefineDebug>true</DefineDebug>
+    <DefineTrace>true</DefineTrace>
     <Optimize>false</Optimize>
     <OutputPath>bin\Debug\</OutputPath>
     <DefineConstants>DEBUG,TRACE,NETFX_CORE</DefineConstants>
-    <WarningLevel>4</WarningLevel>
+    <DocumentationFile>BrowserForWP.Net.xml</DocumentationFile>
+    <NoWarn>41999,42016,42017,42018,42019,42020,42021,42022,42032,42036,42314</NoWarn>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>
+    <DefineDebug>false</DefineDebug>
+    <DefineTrace>true</DefineTrace>
     <Optimize>true</Optimize>
     <OutputPath>bin\Release\</OutputPath>
     <DefineConstants>TRACE,NETFX_CORE</DefineConstants>
-    <WarningLevel>4</WarningLevel>
+    <DocumentationFile>BrowserForWP.Net.xml</DocumentationFile>
+    <NoWarn>41999,42016,42017,42018,42019,42020,42021,42022,42032,42036,42314</NoWarn>
   </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|ARM' ">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <DefineDebug>true</DefineDebug>
+    <DefineTrace>true</DefineTrace>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\ARM\Debug\</OutputPath>
+    <DefineConstants>DEBUG,TRACE,NETFX_CORE</DefineConstants>
+    <DocumentationFile>BrowserForWP.Net.xml</DocumentationFile>
+    <PlatformTarget>ARM</PlatformTarget>
+    <UseVSHostingProcess>false</UseVSHostingProcess>
+    <NoWarn>41999,42016,42017,42018,42019,42020,42021,42022,42032,42036,42314</NoWarn>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|ARM' ">
+    <DebugType>pdbonly</DebugType>
+    <DefineTrace>true</DefineTrace>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\ARM\Release\</OutputPath>
+    <DefineConstants>TRACE,NETFX_CORE</DefineConstants>
+    <DocumentationFile>BrowserForWP.Net.xml</DocumentationFile>
+    <PlatformTarget>ARM</PlatformTarget>
+    <UseVSHostingProcess>false</UseVSHostingProcess>
+    <NoWarn>41999,42016,42017,42018,42019,42020,42021,42022,42032,42036,42314</NoWarn>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|x86' ">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <DefineDebug>true</DefineDebug>
+    <DefineTrace>true</DefineTrace>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\x86\Debug\</OutputPath>
+    <DefineConstants>DEBUG,TRACE,NETFX_CORE</DefineConstants>
+    <DocumentationFile>BrowserForWP.Net.xml</DocumentationFile>
+    <PlatformTarget>x86</PlatformTarget>
+    <UseVSHostingProcess>false</UseVSHostingProcess>
+    <NoWarn>41999,42016,42017,42018,42019,42020,42021,42022,42032,42036,42314</NoWarn>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|x86' ">
+    <DebugType>pdbonly</DebugType>
+    <DefineTrace>true</DefineTrace>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\x86\Release\</OutputPath>
+    <DefineConstants>TRACE,NETFX_CORE</DefineConstants>
+    <DocumentationFile>BrowserForWP.Net.xml</DocumentationFile>
+    <PlatformTarget>x86</PlatformTarget>
+    <UseVSHostingProcess>false</UseVSHostingProcess>
+    <NoWarn>41999,42016,42017,42018,42019,42020,42021,42022,42032,42036,42314</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Reference to the Windows Phone SDK is implicit for this project type. -->
+  </ItemGroup>
   <ItemGroup>
     <Compile Include="Dns\DohResolver.vb" />
     <Compile Include="Http\HttpClient13.vb" />
@@ -48,25 +143,49 @@
     <Compile Include="Tls13\X509Reader.vb" />
   </ItemGroup>
   <ItemGroup>
+    <!-- The implicit imports. Every one of these is load-bearing: removing
+         System.Collections.Generic or System.Text is what produces the
+         "List / Encoding not defined" cascade described in the header comment. -->
+    <Import Include="Microsoft.VisualBasic" />
+    <Import Include="System" />
+    <Import Include="System.Collections" />
+    <Import Include="System.Collections.Generic" />
+    <Import Include="System.Diagnostics" />
+    <Import Include="System.Linq" />
+    <Import Include="System.Net" />
+    <Import Include="System.Text" />
+    <Import Include="System.Threading.Tasks" />
+    <Import Include="System.Runtime.InteropServices.WindowsRuntime" />
+    <Import Include="Windows.Foundation" />
+    <Import Include="Windows.Networking.Sockets" />
+    <Import Include="Windows.Security.Cryptography" />
+    <Import Include="Windows.Security.Cryptography.Certificates" />
+    <Import Include="Windows.Security.Cryptography.Core" />
+    <Import Include="Windows.Storage.Streams" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\BrowserForWP.Crypto\BrowserForWP.Crypto.vbproj">
       <Project>{C0DE0001-0001-4A2B-9C3D-1B2C3D4E5F01}</Project>
       <Name>BrowserForWP.Crypto</Name>
     </ProjectReference>
   </ItemGroup>
-  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|ARM' ">
-    <DebugSymbols>true</DebugSymbols>
-    <DebugType>full</DebugType>
-    <Optimize>false</Optimize>
-    <OutputPath>bin\ARM\Debug\</OutputPath>
-    <DefineConstants>DEBUG,TRACE,NETFX_CORE</DefineConstants>
-    <WarningLevel>4</WarningLevel>
+  <PropertyGroup Condition=" '$(VisualStudioVersion)' == '' or '$(VisualStudioVersion)' &lt; '12.0' ">
+    <VisualStudioVersion>12.0</VisualStudioVersion>
   </PropertyGroup>
-  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|ARM' ">
-    <DebugType>pdbonly</DebugType>
-    <Optimize>true</Optimize>
-    <OutputPath>bin\ARM\Release\</OutputPath>
-    <DefineConstants>TRACE,NETFX_CORE</DefineConstants>
-    <WarningLevel>4</WarningLevel>
+  <PropertyGroup Condition=" '$(TargetPlatformIdentifier)' == '' ">
+    <TargetPlatformIdentifier>WindowsPhoneApp</TargetPlatformIdentifier>
   </PropertyGroup>
-  <Import Project="$(MSBuildToolsPath)\Microsoft.VisualBasic.targets" />
+  <PropertyGroup>
+    <OptionExplicit>On</OptionExplicit>
+  </PropertyGroup>
+  <PropertyGroup>
+    <OptionCompare>Binary</OptionCompare>
+  </PropertyGroup>
+  <PropertyGroup>
+    <OptionStrict>On</OptionStrict>
+  </PropertyGroup>
+  <PropertyGroup>
+    <OptionInfer>On</OptionInfer>
+  </PropertyGroup>
+  <Import Project="$(MSBuildExtensionsPath)\Microsoft\WindowsXaml\v$(VisualStudioVersion)\Microsoft.Windows.UI.Xaml.VisualBasic.targets" Condition="Exists('$(MSBuildExtensionsPath)\Microsoft\WindowsXaml\v$(VisualStudioVersion)\Microsoft.Windows.UI.Xaml.VisualBasic.targets')" />
 </Project>

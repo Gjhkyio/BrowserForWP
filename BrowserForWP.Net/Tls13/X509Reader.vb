@@ -58,9 +58,13 @@ Namespace Tls13
 
             ''' <summary>The element's value bytes, without the header.</summary>
             Public Function Value() As Byte()
-                Dim value(Length - 1) As Byte
-                If Length > 0 Then Array.Copy(Raw, Offset, value, 0, Length)
-                Return value
+                ' The local is `bytes`, not `value`: a local with the same name as the
+                ' containing function is BC30290 "the local variable cannot have the
+                ' same name as the function that contains it". VS is case-insensitive
+                ' here too, so even a differently-cased `value` is rejected.
+                Dim bytes(Length - 1) As Byte
+                If Length > 0 Then Array.Copy(Raw, Offset, bytes, 0, Length)
+                Return bytes
             End Function
 
             ''' <summary>The whole element, header included.</summary>

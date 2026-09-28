@@ -40,8 +40,28 @@
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
+                <!--
+                    TextControlBackground, NOT TextBoxBackgroundThemeBrush.
+
+                    TextBoxBackgroundThemeBrush is a Windows Phone 8.0 (Silverlight)
+                    theme key. WP8.1 XAML does not define it, and the XAML compiler
+                    does not say so: `{ThemeResource <missing key>}` makes CompileXaml
+                    throw an internal lookup failure, logged as
+
+                        Microsoft.Windows.UI.Xaml.Common.targets(327,9):
+                        Xaml Internal Error error WMC9999: The given key was not
+                        present in the dictionary.
+
+                    It is non-fatal — the .xbf and the .appx still get produced and
+                    the build still exits 0 — so it survives review indefinitely
+                    while the brush silently stays unset at runtime. Verified by
+                    swapping the key: the diagnostic disappears, and appears again
+                    when it is restored.
+
+                    ApplicationPageBackgroundThemeBrush below IS a valid WP8.1 key.
+                -->
                 <Border Grid.Column="0"
-                        Background="{ThemeResource TextBoxBackgroundThemeBrush}"
+                        Background="{ThemeResource TextControlBackground}"
                         CornerRadius="4" Padding="4,0">
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                         <!-- Security state; text is set in code-behind from the

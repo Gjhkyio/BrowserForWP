@@ -21,8 +21,12 @@ Namespace Localization
 
         ''' <summary>
         ''' Resource map name. The .resw files are at
-        ''' BrowserForWP/Strings/<tag>/Resources.resw, which the platform exposes
-        ''' under the map name "Strings/Resources".
+        ''' BrowserForWP/Strings/&lt;tag&gt;/Resources.resw, which the platform
+        ''' exposes under the map name "Strings/Resources".
+        '''
+        ''' The angle brackets must be escaped: a doc comment is parsed as XML, so an
+        ''' unescaped &lt;tag&gt; opens an element and the closing &lt;/summary&gt;
+        ''' then mismatches (BC42304).
         ''' </summary>
         Private Const ResourceMap As String = "Strings/Resources"
 
@@ -36,7 +40,7 @@ Namespace Localization
         ''' <summary>The language currently in use.</summary>
         Public Shared ReadOnly Property CurrentLanguage As String
             Get
-                If _current Is Nothing Then Return LanguageCatalog.Default
+                If _current Is Nothing Then Return LanguageCatalog.DefaultTag
                 Return _current
             End Get
         End Property

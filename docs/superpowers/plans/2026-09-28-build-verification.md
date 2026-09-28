@@ -1,17 +1,25 @@
 # Build Verification & AI Disclosure Implementation Plan
 
+> **OUTCOME (2026-09-28, revision 2): the build succeeds.** `BUILD_EXIT=0` for
+> `Debug|ARM` and `Release|ARM`, producing an installable package. It was done on
+> the **ARM64** guest that this plan's Global Constraints wrongly ruled out. See
+> [Outcome](#outcome-arm64-guest-builds-the-plan-was-wrong-about-the-host) at the
+> end of this file before acting on anything below; the constraint that follows
+> in the next section is **superseded** and is kept only as a record of the
+> mistake.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Prove that BrowserForWP actually compiles, or establish with evidence why it cannot be proven on the available hardware, and make the project's AI authorship and maintenance loop explicit.
 
-**Architecture:** Two layers. First, a static VB.NET structural checker (`tools/check-vb.mjs`) that reproduces the compiler checks that are mechanically reproducible off-Windows, so the project is never left with *zero* verification. Second, a real MSBuild pass on an x64 Windows host with Visual Studio 2013 Update 4 and the Windows Phone 8.1 SDK, which is the only thing that proves a build. The first layer is done; the second is blocked on hardware and is specified here precisely enough to execute.
+**Architecture:** Two layers. First, a static VB.NET structural checker (`tools/check-vb.mjs`) that reproduces the compiler checks that are mechanically reproducible off-Windows, so the project is never left with *zero* verification. Second, a real MSBuild pass with Visual Studio 2013 and the Windows Phone 8.1 SDK, which is the only thing that proves a build. Both layers now exist and both run; the second is driven by `tools/vm-build.cmd`.
 
-**Tech Stack:** VB.NET / WinRT 8.1, MSBuild 12.0, Visual Studio 2013 Update 4+, Windows Phone 8.1 SDK, Node.js (verification tooling only), Parallels Desktop (virtualisation).
+**Tech Stack:** VB.NET / WinRT 8.1, MSBuild 12.0, Visual Studio 2013, Windows Phone 8.1 SDK, Node.js (verification tooling only), Parallels Desktop (virtualisation), ARM64 Windows 11 guest.
 
 ## Global Constraints
 
 - **Target platform is fixed:** `TargetPlatformVersion 8.1`, `AppContainerExe`, Windows Phone 8.1 (Silverlight-free WinRT/XAML). Do not raise it.
-- **The build requires an x64 Windows host.** Microsoft supports Visual Studio 2013 on x86/x64 only. Their documentation states: *"Visual Studio versions before 17.4 can run on Arm-powered devices via x64 emulation, but some features aren't supported on Arm. Therefore, we don't recommend running these versions of Visual Studio on devices that use Arm-based processors."* An ARM64 Windows VM cannot do this build and must not be used for it.
+- ~~**The build requires an x64 Windows host.**~~ **SUPERSEDED — this was wrong.** The reasoning was: Microsoft supports Visual Studio 2013 on x86/x64 only, their documentation states *"Visual Studio versions before 17.4 can run on Arm-powered devices via x64 emulation, but some features aren't supported on Arm"*, and therefore "an ARM64 Windows VM cannot do this build". The first two statements are true and the conclusion does not follow from them. That documentation is about the **Visual Studio IDE**; it says nothing about invoking `msbuild.exe` from the command line, which is how the build actually works. An ARM64 guest has now built this solution, repeatedly. Requiring x64 on the strength of an untested inference cost three rounds of avoidable errors. **Try the build before declaring it impossible.**
 - **The SDK is Windows-only.** No part of the VB compile can be performed on macOS or Linux. Any verification claim must say which layer it covers.
 - **`en-US` is the default and fallback language; `it-IT` is secondary.** Every user-visible string exists in both.
 - **Verification floor before any commit:** `node tools/check-vb.mjs` exits 0 and `node tools/gen-vectors.mjs` prints `52 assertions, 0 failure(s)`.
@@ -164,6 +172,15 @@ git push origin HEAD
 
 ### Task 3: Provision an x64 Windows build host
 
+> **SUPERSEDED — do not execute this task as written.** The host it provisions
+> already existed and needed no provisioning: the ARM64 Parallels guest with the
+> VS2013 toolchain pre-installed builds the solution today via
+> `tools/vm-build.cmd`. This task is kept as the record of a wrong inference, not
+> as instructions. See [Outcome](#outcome-arm64-guest-builds-the-plan-was-wrong-about-the-host).
+> Before it: *"an x64 build host, because Visual Studio 2013 is not supported on
+> Arm64"* — the premise is about the IDE, the conclusion is about `msbuild.exe`,
+> and the link between them was never tested.
+
 **Files:**
 - Modify: `docs/MAINTAINING.md` (record the requirement)
 
@@ -230,7 +247,7 @@ Add to `docs/MAINTAINING.md` under a new `## Build host requirements` heading:
 
 A real build needs:
 
-- **An x64 Windows host.** Visual Studio 2013 is not supported on Arm64
+- ~~**An x64 Windows host.**~~ **Wrong — see the Outcome section.** Visual Studio 2013 is not supported on Arm64
   Windows: Microsoft recommends against running pre-17.4 Visual Studio on
   Arm-based devices, and the WP8.1 SDK ships no Arm64 MSBuild targets.
 - Visual Studio 2013 Update 4 or later.
@@ -303,12 +320,13 @@ dir BrowserForWP\bin\ARM\Debug\BrowserForWP.exe
 Expected: one `.exe`. A `Build succeeded` with no output usually means a project
 was silently skipped by the configuration mapping.
 
-- [ ] **Step 5: Record the verified result verbatim**
+- [x] **Step 5: Record the verified result verbatim**
 
-Paste the real MSBuild tail into `docs/MAINTAINING.md` under
-`## Build host requirements`, replacing the sentence that says the project has
-never been compiled. Include the VS version and the SDK version. Do not
-paraphrase; the whole value is that it is a real transcript.
+**Done.** The transcript, the toolchain versions and the error taxonomy are in
+`docs/MAINTAINING.md`. The build succeeded, so there is no "could not be proven"
+sentence left to replace — the section is now "The build that actually works"
+plus the round-by-round record. The VS version is 2013, MSBuild 12.0.40629.0,
+WP8.1 SDK 8.1, Windows 8.1 SDK 8.1.
 
 - [ ] **Step 6: Commit and push**
 
@@ -334,7 +352,12 @@ git push origin HEAD
 
 - [x] **Step 1: Add the English disclosure**
 
-Appended to `README.md` after the licence as `## Disclosure: this project is 100% AI-made`, listing what is verified (RFC vectors, three live TLS 1.3 handshakes) and what is not (never compiled, never run on a phone, ARM64 build attempt documented).
+Appended to `README.md` after the licence as `## Disclosure: this project is 100% AI-made`, listing what is verified (RFC vectors, three live TLS 1.3 handshakes, and from revision 2 a real MSBuild build) and what is not (never run on a handset; the polyfill bundle is packaged but not injected).
+
+**Revision note:** this step originally described the disclosure as saying
+"never compiled" and "ARM64 build attempt documented". Both statements were true
+when written and are now false; the disclosure was rewritten in the same commit
+that first produced a successful build.
 
 - [x] **Step 2: Add the Italian equivalent**
 
@@ -437,7 +460,7 @@ git push origin HEAD
 
 | Request | Where |
 | --- | --- |
-| Verify the app compiles under VS2013 on a Windows 11 Parallels VM | Task 3 (host is ARM64 and cannot; x64 prerequisite specified), Task 4 (the build itself) |
+| Verify the app compiles under VS2013 on a Windows 11 Parallels VM | **Done.** The ARM64 Parallels guest builds it: `BUILD_EXIT=0` for `Debug|ARM` and `Release|ARM`, package produced. Task 3's x64 prerequisite was wrong; see the Outcome section. |
 | Search how to implement, implement TLS 1.3 from scratch if needed | Already implemented and verified in the previous plan revision; `BrowserForWP.Net/Tls13/` plus `tools/proto/tls13.mjs`, 31 live checks |
 | Always push | Task 6 Step 2 pins it as step 5 of the loop, with a `git ls-remote` check |
 | Always update the agent skill with new functions and maintenance | Task 6 Steps 1-4, including "a skill that describes a previous version is harmful" |
@@ -465,3 +488,62 @@ cannot be executed on the hardware present. That is stated up front and in the
 READMEs rather than worked around. A static checker is a real, useful result —
 it found an actual `End Property`/`End Class` error — but it is not a build, and
 this plan never claims otherwise.
+
+---
+
+## Outcome: ARM64 guest builds; the plan was wrong about the host
+
+**Result: `BUILD_EXIT=0`, no `BC` errors, for `Debug|ARM` and `Release|ARM`, with
+`BrowserForWP.exe`, the four library DLLs, `App.xbf`, `MainPage.xbf` and the
+`*.appx` / `*.appxbundle` / `*.appxupload` set produced. Twelve consecutive
+rebuilds agreed.**
+
+### What the plan got wrong
+
+It declared an x64 host mandatory and an ARM64 VM impossible, and it was neither
+of those things. The inference was: *Microsoft documents that pre-17.4 Visual
+Studio is unsupported on Arm, therefore the build cannot run there.* The premise
+is about the IDE, the conclusion is about the toolchain, and nobody tested the
+link between them before writing it down as a Global Constraint — in a plan whose
+entire purpose was to replace assumption with evidence.
+
+The build driver is `msbuild.exe` on the command line, and it works fine (see
+`tools/vm-build.cmd`).
+
+### What was wrong with the code, once it was actually compiled
+
+Four rounds were needed. `docs/MAINTAINING.md` holds the full record; the short
+version is that **none** of the errors were findable by `tools/check-vb.mjs` at
+the time, and most were VB-specific traps rather than logic bugs:
+
+| Round | Defect | Errors |
+| --- | --- | --- |
+| 1 | `MainPage.xaml` had two direct children of `<Page>`, so `Page.Content` was set twice and the XAML compiler never generated `MainPage.g.vb`. Every `x:Name` field then "did not exist". | ~70, all cascading |
+| 2 | `BrowserForWP.vbproj` declared `<Content Include="Polyfill\compat.js" />` for a file that never existed, aborting the build before the XAML compile. | ~40, all cascading |
+| 3 | `BrowserForWP.Net.vbproj` had no `<Import Include>` ItemGroup and no option groups; `ClientHelloBuilder.vb` used VB-14 leading-dot chains; a local named `extensionType` shadowed the `ExtensionType` enum; `TlsReader` had no `SubReaderVec24`; `WinRtCrypto.ToBuffer` was `Friend`; `CertificateVerifyInfo` was nested; `CryptographicEngine.Verify` does not exist; `Encoding.ASCII` is absent from the profile. | 54, across 6 files |
+| 4 | `{ThemeResource TextBoxBackgroundThemeBrush}` is a WP8.0 key that WP8.1 does not define (non-fatal `WMC9999`); base image assets were unqualified, so the packager warned `APPX1621` six times. | 0 errors, 2 defect classes |
+
+### What this changes in the plan
+
+- `tools/check-vb.mjs` grew from 9 to 12 check categories (adding VB 12 syntax,
+  profile hazards, and comment hazards) and from 33 to 36 check groups. Its header
+  no longer claims the VM cannot host VS2013.
+- The verification command is `tools\vm-build.cmd` inside the guest, not "build
+  in Visual Studio".
+- Task 4's "describe categories of error rather than a literal transcript,
+  because the exact errors cannot be known before the first compile" is now
+  answerable with a literal transcript, and it is in `docs/MAINTAINING.md`.
+- The honest gap in Self-Review §4 is closed: the thing the user asked to be
+  proven has been proven. What remains genuinely unverified is runtime behaviour
+  on a handset, and the polyfill injection that was never written.
+
+### Still open
+
+1. **The polyfill is packaged but not injected.** `TridentEngine` has no
+   injection code. The READMEs now say so instead of claiming the opposite.
+2. **`WMC9999` is intermittent and unexplained**, though demonstrably harmless:
+   it never changes the exit code and the compiled `.xbf` files are byte-identical
+   across runs that show it and runs that do not. Four hypotheses were tested and
+   eliminated (see `docs/MAINTAINING.md`).
+3. **Nothing has run on a handset.** Compiling is not running; XAML layout,
+   WebView behaviour and 2014-hardware performance remain unverified.

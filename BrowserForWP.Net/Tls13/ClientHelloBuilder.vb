@@ -51,13 +51,24 @@ Namespace Tls13
             ' The outer record's legacy_record_version is 0x0301 (=0x0303 also
             ' works). The version that actually matters, 0x0304, appears ONLY
             ' inside supported_versions.
-            Dim record As Byte() = New TlsWriter().
-                U8(CInt(ContentType.Handshake)).
-                U16(&H301).
-                U16(handshake.Length).
-                Bytes(handshake).
-                ToArray()
-            Return record
+            '
+            ' WHY `With` AND NOT A FLUENT CHAIN: this project targets VB 12
+            ' (Visual Studio 2013), which has no implicit line continuation after a
+            ' '.'. Writing the chain the way the JavaScript prototype does —
+            '     New TlsWriter().\n        U8(...).\n        U16(...)
+            ' — is BC30203 ("identifier expected") on the trailing dot, and then
+            ' every method name on the following lines is reported as "not
+            ' declared": 24 errors in this file alone, none of which point at the
+            ' real cause. Leading-dot continuation arrived in VB 14 (VS2015).
+            ' `With` gives the same reading order and compiles on VB 12.
+            Dim record As New TlsWriter()
+            With record
+                .U8(CInt(ContentType.Handshake))
+                .U16(&H301)
+                .U16(handshake.Length)
+                .Bytes(handshake)
+            End With
+            Return record.ToArray()
         End Function
 
         ''' <summary>
@@ -79,82 +90,103 @@ Namespace Tls13
                 Throw New ArgumentException("legacy session id must be 32 bytes", "legacySessionId")
             End If
 
-            Dim extensions As New List(Of Byte)()
+            ' List(Of Byte()), not List(Of Byte): each entry is a whole encoded
+            ' extension, and `Flatten` below is declared to take List(Of Byte()).
+            ' Getting this wrong reports "cannot convert Byte() to Byte" at every
+            ' extensions.Add and "cannot convert List(Of Byte) to List(Of
+            ' Byte())" at Flatten, which reads like a Flatten bug and is not.
+            Dim extensions As New List(Of Byte())()
 
             ' server_name
-            Dim serverName As Byte() = New TlsWriter().
-                U8(0).                                  ' NameType: host_name
-                U16(System.Text.Encoding.UTF8.GetByteCount(hostName)).
-                Ascii(hostName).
-                ToArray()
-            extensions.Add(New TlsWriter().
-                U16(CInt(ExtensionType.ServerName)).
-                Vec16(serverName).
-                ToArray())
+            Dim serverName As New TlsWriter()
+            With serverName
+                .U8(0)                                  ' NameType: host_name
+                .U16(System.Text.Encoding.UTF8.GetByteCount(hostName))
+                .Ascii(hostName)
+            End With
+            extensions.Add(Extension(CInt(ExtensionType.ServerName), serverName.ToArray()))
 
             ' supported_versions
-            extensions.Add(New TlsWriter().
-                U16(CInt(ExtensionType.SupportedVersions)).
-                Vec8({CByte((TlsLimits.Tls13Version >> 8) And &HFF),
-                      CByte(TlsLimits.Tls13Version And &HFF)}).
-                ToArray())
+            extensions.Add(Extension(CInt(ExtensionType.SupportedVersions),
+                New Byte() {CByte((TlsLimits.Tls13Version >> 8) And &HFF),
+                            CByte(TlsLimits.Tls13Version And &HFF)}))
 
             ' supported_groups
-            extensions.Add(New TlsWriter().
-                U16(CInt(ExtensionType.SupportedGroups)).
-                Vec16({CByte((CInt(NamedGroup.X25519) >> 8) And &HFF),
-                       CByte(CInt(NamedGroup.X25519) And &HFF)}).
-                ToArray())
+            extensions.Add(Extension(CInt(ExtensionType.SupportedGroups),
+                New Byte() {CByte((CInt(NamedGroup.X25519) >> 8) And &HFF),
+                            CByte(CInt(NamedGroup.X25519) And &HFF)}))
 
-            ' signature_algorithms. rsa_pkcs1_sha256 is included for certificate
-            ' chain signatures only; RFC 8446 §4.4.3 forbids it for
-            ' CertificateVerify in TLS 1.3.
-            extensions.Add(New TlsWriter().
-                U16(CInt(ExtensionType.SignatureAlgorithms)).
-                Vec16({CByte(&H4), CByte(&H3),      ' ecdsa_secp256r1_sha256
-                       CByte(&H8), CByte(&H4),      ' rsa_pss_rsae_sha256
-                       CByte(&H4), CByte(&H1)}).
-                ToArray())
+            ' signature_algorithms: 0x0403 = ecdsa_secp256r1_sha256,
+            ' 0x0804 = rsa_pss_rsae_sha256, 0x0401 = rsa_pkcs1_sha256 (cert chains
+            ' only; RFC 8446 §4.4.3 forbids it for CertificateVerify in TLS 1.3).
+            ' Matches the list in tools/proto/tls13.mjs — keep the two in step.
+            '
+            ' No inline comment inside the braces: a trailing comment on a
+            ' continued line inside an array literal is BC30201 in VB 12. The two
+            ' literals above are comment-free for the same reason.
+            extensions.Add(Extension(CInt(ExtensionType.SignatureAlgorithms),
+                New Byte() {CByte(&H4), CByte(&H3), CByte(&H8), CByte(&H4), CByte(&H4), CByte(&H1)}))
 
             ' ALPN: HTTP/1.1 only. RFC 7301 requires a client to be able to speak
             ' every protocol it offers, and BrowserForWP's HTTP client speaks
             ' HTTP/1.1. Offering "h2" makes servers select HTTP/2 and then reject
             ' our requests, which is a bug we hit in the prototype.
             Dim alpnProtocol As Byte() = System.Text.Encoding.UTF8.GetBytes("http/1.1")
-            Dim alpnEntry As Byte() = New TlsWriter().U8(alpnProtocol.Length).
-                                                  Bytes(alpnProtocol).ToArray()
-            extensions.Add(New TlsWriter().
-                U16(CInt(ExtensionType.Alpn)).
-                Vec16(New TlsWriter().Vec16(alpnEntry).ToArray()).
-                ToArray())
+            Dim alpnEntry As New TlsWriter()
+            With alpnEntry
+                .U8(alpnProtocol.Length)
+                .Bytes(alpnProtocol)
+            End With
+            Dim alpnList As New TlsWriter()
+            With alpnList
+                .Vec16(alpnEntry.ToArray())
+            End With
+            extensions.Add(Extension(CInt(ExtensionType.Alpn), alpnList.ToArray()))
 
             ' key_share — the key carries its own 2-byte length. See file header.
-            Dim keyShareEntry As Byte() = New TlsWriter().
-                U16(CInt(NamedGroup.X25519)).
-                U16(x25519PublicKey.Length).
-                Bytes(x25519PublicKey).
-                ToArray()
-            extensions.Add(New TlsWriter().
-                U16(CInt(ExtensionType.KeyShare)).
-                Vec16(New TlsWriter().Vec16(keyShareEntry).ToArray()).
-                ToArray())
+            Dim keyShareEntry As New TlsWriter()
+            With keyShareEntry
+                .U16(CInt(NamedGroup.X25519))
+                .U16(x25519PublicKey.Length)
+                .Bytes(x25519PublicKey)
+            End With
+            Dim keyShareList As New TlsWriter()
+            With keyShareList
+                .Vec16(keyShareEntry.ToArray())
+            End With
+            extensions.Add(Extension(CInt(ExtensionType.KeyShare), keyShareList.ToArray()))
 
             Dim extensionBlock As Byte() = New TlsWriter().Vec16(Flatten(extensions)).ToArray()
 
-            Dim body As Byte() = New TlsWriter().
-                U16(TlsLimits.LegacyVersion).           ' legacy_version
-                Bytes(random).
-                Vec8(legacySessionId).
-                Vec16({CByte(&H13), CByte(&H1)}).       ' cipher_suites: TLS_AES_128_GCM_SHA256
-                Vec8({CByte(0)}).                       ' legacy_compression_methods: null
-                Bytes(extensionBlock).
-                ToArray()
+            Dim body As New TlsWriter()
+            With body
+                .U16(TlsLimits.LegacyVersion)           ' legacy_version
+                .Bytes(random)
+                .Vec8(legacySessionId)
+                .Vec16(New Byte() {CByte(&H13), CByte(&H1)})  ' TLS_AES_128_GCM_SHA256
+                .Vec8(New Byte() {CByte(0)})            ' legacy_compression_methods
+                .Bytes(extensionBlock)
+            End With
 
-            Return New TlsWriter().
-                U8(CInt(HandshakeType.ClientHello)).
-                U24(body.Length).
-                Bytes(body).
-                ToArray()
+            Dim handshake As New TlsWriter()
+            With handshake
+                .U8(CInt(HandshakeType.ClientHello))
+                .U24(body.Length)
+                .Bytes(body.ToArray())
+            End With
+            Return handshake.ToArray()
+        End Function
+
+        ''' <summary>
+        ''' One extension on the wire: uint16 type, uint16 length, body.
+        ''' </summary>
+        Private Shared Function Extension(extensionType As Integer, body As Byte()) As Byte()
+            Dim writer As New TlsWriter()
+            With writer
+                .U16(extensionType)
+                .Vec16(body)
+            End With
+            Return writer.ToArray()
         End Function
 
         ''' <summary>

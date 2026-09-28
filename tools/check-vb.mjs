@@ -5,14 +5,20 @@
 //  WHY THIS EXISTS
 //  ---------------
 //  The Windows Phone 8.1 SDK cannot be installed on this project's development
-//  host (an Apple silicon Mac), and the available ARM64 Windows 11 VM cannot
-//  host Visual Studio 2013 either — Microsoft does not support pre-17.4 Visual
-//  Studio on Arm-based processors, and the WP8.1 SDK's MSBuild targets were
-//  never ported to Arm64 hosts.
+//  host (an Apple silicon Mac), so the sources are developed off-platform.
 //
-//  That leaves a real gap: nobody has compiled these sources. Rather than accept
-//  "untested", this tool performs the subset of compiler checks that can be
-//  reproduced exactly, deterministically, on any machine:
+//  They are NOT, however, uncompiled. An ARM64 Windows 11 Parallels guest does
+//  host the whole VS2013 toolchain and builds the solution for real; see
+//  tools/vm-build.cmd and the round-by-round transcripts in docs/MAINTAINING.md.
+//  An earlier revision of this header claimed the VM could not host VS2013. That
+//  was wrong, and it is worth saying so plainly: the claim was inferred from
+//  Microsoft's "Visual Studio does not support Arm processors" documentation
+//  instead of from trying it, and the cost of not trying was three rounds of
+//  compile errors that a two-minute build would have surfaced immediately.
+//
+//  This tool still earns its place, because the guest round trip is slow and its
+//  output is in Italian. It catches the cheap, repetitive mistakes first, on any
+//  machine:
 //
 //    1. Block balance          every Class/Sub/If/Try/... has its terminator
 //    2. Implements completeness an `Implements IDisposable` needs matching members
@@ -22,13 +28,28 @@
 //    5. Cross-project imports  every `Imports BrowserForWP.X` names a real namespace
 //    6. Resource parity        en-US and it-IT define exactly the same keys
 //    7. XAML handler wiring    every event handler named in XAML exists in VB
+//    8. XAML single root child  a Page sets Content exactly once
+//    9. Char-range literals    ChrW cannot express a supplementary-plane code point
+//   10. VB 12 syntax           no leading-dot line continuation (VS2015 and later)
+//   11. Profile hazards        APIs absent from .NET for Windows Store apps
+//   12. Comment hazards        '--' in XML comments, unescaped '<' in doc comments
 //
 //  WHAT IT CANNOT DO
 //  -----------------
 //  It is not a compiler. It cannot type-check, resolve overloads, verify WinRT
-//  API availability, or catch a wrong method signature. A clean run means "no
-//  mechanical defects of these seven kinds", not "compiles". Do not let a green
-//  run here substitute for an actual build on Windows.
+//  API availability in general, or catch a wrong method signature. A clean run
+//  means "no mechanical defects of these kinds", not "compiles".
+//
+//  Concretely, every one of the following compiled clean here and failed in the
+//  guest, so treat a green run as a filter and not as a verdict:
+//
+//    * `Friend` members used from a referencing assembly (BC30390)
+//    * a nested class named in another file's signature (BC30002)
+//    * a local named the same as an enclosing type or member, which VB's
+//      case-insensitivity turns into a shadowing error at the USE site
+//      (BC30039 / BC30456 "is not a member of 'Integer'")
+//    * a XAML `{ThemeResource ...}` key that does not exist on WP8.1
+//      (WMC9999, non-fatal and therefore silent in review)
 //
 //  USAGE
 //    node tools/check-vb.mjs          # report, exit 1 on any finding
@@ -603,6 +624,156 @@ function checkCharLiterals() {
   if (!anyBad) ok('no ChrW/Chr call exceeds the 16-bit range of a Char');
 }
 
+// ── 10. VB 12 syntax ──────────────────────────────────────────────────────
+// Visual Studio 2013 ships VB 12. Implicit line continuation AFTER a '.'
+// arrived in VB 14 (VS2015), so the JavaScript-style fluent chain
+//
+//     Dim w = New TlsWriter().
+//         U8(1).
+//         U16(2).
+//         ToArray()
+//
+// is not merely unconventional here, it does not parse. The damage is worse
+// than one bad line: the compiler reports BC30203 on the trailing dot and then
+// "<name> is not declared" for every method in the chain, so a 4-line mistake
+// produces twenty errors that all name the wrong thing. Rewrite as a `With`
+// block, which reads the same and compiles.
+function checkVb12Syntax() {
+  heading('VB 12 syntax (no VS2015-only constructs)');
+  checksRun++;
+  let anyBad = false;
+
+  for (const project of projects) {
+    for (const src of walk(project.dir, (f) => f.endsWith('.vb'))) {
+      const lines = cleanLines(fs.readFileSync(src, 'utf8'));
+      lines.forEach((line, idx) => {
+        // A code line ending in '.' is a chain continued on the next line.
+        // Comments and string contents are already gone, so a sentence in a
+        // comment or a '.' inside a literal cannot trigger this.
+        if (/\.\s*$/.test(line)) {
+          fail('vb12', src,
+            'line ends with ".", so the next line continues a method chain. VB 12 ' +
+            '(VS2013) has no implicit line continuation after a period; this is BC30203 ' +
+            'plus a phantom "not declared" for every following method. Use a With block ' +
+            'and one call per line.',
+            idx + 1);
+          anyBad = true;
+        }
+      });
+    }
+  }
+  if (!anyBad) ok('no leading-dot method chains (VB 12 cannot continue a line after ".")');
+}
+
+// ── 11. Fine .NET-for-Windows-Store-apps profile hazards ──────────────────
+// The WP8.1 app and library projects compile against the .NET for Windows
+// Store apps profile, not full .NET. A handful of members that are unconditional
+// on the desktop simply are not there, and the compiler error names the member
+// as missing from a type that obviously has it, which reads like a typo.
+const PROFILE_HAZARDS = [
+  [/\bEncoding\.(ASCII|UTF7|UTF32)\b/,
+    'not in the Store profile (it needs ASCIIEncoding/UTF7Encoding, which the ' +
+    'profile removes). Encode ASCII explicitly, or use Encoding.UTF8 after ' +
+    'validating the input is ASCII.'],
+  [/\bRegexOptions\.Compiled\b/,
+    'RegexOptions.Compiled is not supported in the Store profile.'],
+  [/\b(CryptographicException|RNGCryptoServiceProvider|RandomNumberGenerator|SHA256Managed|HMACSHA256|SHA256|HMACSHA1)\b/,
+    'System.Security.Cryptography is not in the Store profile. Use ' +
+    'Windows.Security.Cryptography.Core through WinRtCrypto, and InvalidOperationException ' +
+    'or ArgumentException for failures.'],
+  [/\bCryptographicEngine\.Verify\b/,
+    'the WinRT type exposes VerifySignature / VerifySignatureWithHashInput, not Verify.'],
+];
+
+function checkProfileHazards() {
+  heading('NETFX_CORE profile hazards');
+  checksRun++;
+  let anyBad = false;
+
+  for (const project of projects) {
+    for (const src of walk(project.dir, (f) => f.endsWith('.vb'))) {
+      const lines = cleanLines(fs.readFileSync(src, 'utf8'));
+      lines.forEach((line, idx) => {
+        for (const [pattern, message] of PROFILE_HAZARDS) {
+          if (pattern.test(line)) {
+            fail('profile', src, `${line.trim()} — ${message}`, idx + 1);
+            anyBad = true;
+          }
+        }
+      });
+    }
+  }
+  if (!anyBad) ok('no use of APIs missing from the .NET for Windows Store apps profile');
+}
+
+// ── 12. Comment hazards ──────────────────────────────────────────────────
+// Two ways a comment can break a build.
+//
+//  * '--' is illegal inside an XML comment. The project file then fails to
+//    load at all (MSB4025), and in a solution build the symptom is the far less
+//    informative MSB4078 "project file is not supported by MSBuild". The
+//    temptation is to draw a rule line out of dashes in a header comment.
+//
+//  * An XML doc comment is parsed as XML. `<0..2^24-1>`, copied straight from
+//    an RFC's grammar, is an invalid tag name and the whole doc comment is
+//    discarded with a warning (BC42304). Escape it as &lt;...&gt;.
+const XML_ISH = ['.vbproj', '.xaml', '.appxmanifest', '.resw', '.sln', '.xml'];
+
+function checkCommentHazards() {
+  heading('Comment hazards (XML comments, doc comments)');
+  checksRun++;
+  let anyBad = false;
+
+  // Doubled dashes inside an XML comment, in any XML-ish file.
+  for (const file of walk(ROOT, (f) => XML_ISH.some((e) => f.endsWith(e)))) {
+    const source = fs.readFileSync(file, 'utf8');
+    const lines = source.split(/\r?\n/);
+    let inComment = false;
+    lines.forEach((raw, idx) => {
+      let cursor = 0;
+      for (;;) {
+        if (!inComment) {
+          const open = raw.indexOf('<!--', cursor);
+          if (open === -1) break;
+          inComment = true;
+          cursor = open + 4;
+        }
+        const close = raw.indexOf('-->', cursor);
+        const bodyEnd = close === -1 ? raw.length : close;
+        if (raw.slice(cursor, bodyEnd).includes('--')) {
+          fail('comment', file,
+            'XML comments cannot contain "--". MSBuild refuses to load the whole ' +
+            'project (MSB4025); from a solution build this surfaces as the ' +
+            'unrelated-looking MSB4078 "project file is not supported by MSBuild".',
+            idx + 1);
+          anyBad = true;
+        }
+        if (close === -1) break;
+        inComment = false;
+        cursor = close + 3;
+      }
+    });
+  }
+
+  // Unescaped '<' followed by a digit inside a ''' doc comment.
+  for (const project of projects) {
+    for (const src of walk(project.dir, (f) => f.endsWith('.vb'))) {
+      fs.readFileSync(src, 'utf8').split(/\r?\n/).forEach((raw, idx) => {
+        if (!/^\s*'''/.test(raw)) return;
+        if (/<'?\d|<\d/.test(raw)) {
+          fail('comment', src,
+            'a doc comment is parsed as XML: "<0..2^24-1>" is an invalid tag name ' +
+            'and discards the comment with BC42304. Escape it as &lt;...&gt;.',
+            idx + 1);
+          anyBad = true;
+        }
+      });
+    }
+  }
+
+  if (!anyBad) ok('no "--" in XML comments and no unescaped "<" in doc comments');
+}
+
 // ── Run ────────────────────────────────────────────────────────────────────
 console.log('VB.NET structural checker — BrowserForWP');
 console.log('(This is NOT a compiler. See the header for exactly what it proves.)');
@@ -621,6 +792,9 @@ checkResourceParity();
 checkXamlHandlers();
 checkXamlRoot();
 checkCharLiterals();
+checkVb12Syntax();
+checkProfileHazards();
+checkCommentHazards();
 
 console.log(`\n${checksRun} check group(s) run, ${findings.length} finding(s).`);
 if (findings.length > 0) {
@@ -631,6 +805,10 @@ if (findings.length > 0) {
   }
   process.exit(1);
 }
-console.log('\nNo mechanical defects found in the seven checked categories.');
-console.log('This does NOT mean the project compiles — build it on x64 Windows');
-console.log('with Visual Studio 2013 Update 4 and the Windows Phone 8.1 SDK.');
+console.log('\nNo mechanical defects found in the twelve checked categories.');
+console.log('This still does NOT mean the project compiles. Build it for real:');
+console.log('');
+console.log('  prlctl exec "{66a2f493-162c-4b3f-ba40-0a26020cc818}" "cmd.exe" "/c" \\');
+console.log('      "C:\\Mac\\Home\\Documents\\BrowserForWP\\tools\\vm-build.cmd"');
+console.log('');
+console.log('See docs/MAINTAINING.md for the toolchain layout in that guest.');

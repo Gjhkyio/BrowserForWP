@@ -171,27 +171,75 @@ A real build needs **all three** of the following. Without them, the only
 verification available is `tools/check-vb.mjs`, which is a static checker and
 not a compiler.
 
-1. **An x64 Windows host.** Visual Studio 2013 is not supported on Arm64
-   Windows. Microsoft states that pre-17.4 Visual Studio "can run on Arm-powered
-   devices via x64 emulation, but some features aren't supported on Arm", and
-   the WP8.1 SDK ships no Arm64 MSBuild targets. An Arm64 VM cannot do this
-   build, at any setting.
+1. **A Windows host with the toolchain installed.** An **x64** host is what
+   Microsoft documents and the safe default. It is not the only host that works:
+   this project builds on an **ARM64** Windows 11 Parallels guest, driving
+   `msbuild.exe` directly from the command line.
+
+   An earlier revision of this file asserted that an Arm64 VM "cannot do this
+   build, at any setting", citing Microsoft's statement that pre-17.4 Visual
+   Studio is unsupported on Arm. That statement is about the **IDE**; it does not
+   follow that the **command-line build** fails, and nobody had tested it. It
+   works. The cost of assuming otherwise was three rounds of compile errors that
+   a two-minute build would have surfaced immediately.
 2. **Visual Studio 2013 Update 4 or later.** Update 2 is the documented minimum
    for Windows Phone 8.1.
 3. **The Windows Phone 8.1 SDK and the Windows 8.1 SDK.** The latter is required
    by `TargetPlatformVersion 8.1`.
 
+## The build that actually works
+
+```bash
+prlctl exec "{66a2f493-162c-4b3f-ba40-0a26020cc818}" "cmd.exe" "/c" \
+    "C:\Mac\Home\Documents\BrowserForWP\tools\vm-build.cmd"
+```
+
+`tools/vm-build.cmd` cds to the repository, prints the MSBuild version, checks the
+three toolchain paths, then runs
+
+```
+msbuild BrowserForWP.sln /nologo /v:minimal /p:Configuration=Debug /p:Platform=ARM
+```
+
+and prints `=== BUILD_EXIT=<n> ===`. Extra arguments are forwarded, so
+`tools\vm-build.cmd /t:Rebuild` performs a clean build.
+
+**Quoting is load-bearing.** `prlctl exec` takes the command and its arguments as
+SEPARATE argv entries. `prlctl exec <vm> "cmd /c ver"` fails *silently*, because
+argv[0] becomes a program literally named `cmd /c ver`. `--current-user` and `-u`
+also fail on this guest (no stored credentials); do not guess at them. That is why
+the build lives in a batch file rather than a one-liner.
+
+Verified toolchain in that guest (`BIOS type: efi-arm64`, Windows 11, Parallels
+Tools 27.0.0-58628):
+
+| Component | Path | Version |
+| --- | --- | --- |
+| MSBuild | `C:\Program Files (x86)\MSBuild\12.0\Bin\MSBuild.exe` | 12.0.40629.0 |
+| Visual Studio | `...\Microsoft Visual Studio 12.0\Common7\IDE\devenv.exe` | 2013 |
+| Windows Phone SDK | `C:\Program Files (x86)\Microsoft SDKs\Windows Phone\v8.1` | 8.1 |
+| Windows SDK | `C:\Program Files (x86)\Windows Kits\8.1` | 8.1 |
+| Repository | `C:\Mac\Home\Documents\BrowserForWP` (Parallels shared folder) | |
+
+`devenv.exe` is present but is not the build driver: every build and every
+measurement in this file comes from `msbuild.exe` on the command line.
+
 ### Status of the build
 
-**A real build has been run, from Visual Studio inside the Windows VM, over the
-Parallels shared folder** (`C:\Mac\Home\Documents\BrowserForWP\...`). It did not
-succeed. This section is the record; keep it current rather than aspirational.
+**The solution builds, cleanly, for `Debug|ARM` and `Release|ARM`.** Each build
+produces the four library DLLs, `BrowserForWP.exe`, `App.xbf`, `MainPage.xbf` and
+a package set (`*.appx`, `*.appxbundle`, `*.appxupload`) under
+`BrowserForWP\AppPackages\`. Repeated `Rebuild` runs are consistent: 12
+consecutive builds, `BUILD_EXIT=0` every time, zero `BC` errors.
 
-The Visual Studio version and SDK build numbers were not captured — fill them in
-on the next attempt.
+The sections below are the round-by-round record. They are kept in full because
+the error taxonomy is the reusable part — every one of these families looked like
+something other than what it was. Read the two `Status of the build` entries in
+order.
 
-**Observed failures and what they meant.** Approximately 78 errors, but they
-were the product of two defects:
+### Round 1 and Round 2
+
+Approximately 78 errors, but they were the product of two defects:
 
 | Symptom | Real cause | Fix applied |
 | --- | --- | --- |
@@ -206,18 +254,14 @@ story, and row 1's error message understates it by an order of magnitude. When a
 build produces dozens of unidentified-identifier errors, look for the one
 structural failure that stopped code generation before reading any of them.
 
-### Build from local disk, not the shared folder
+### Shared folder or local disk?
 
-Do this before debugging anything else:
-
-```cmd
-xcopy /E /I /Y "C:\Mac\Home\Documents\BrowserForWP" "C:\dev\BrowserForWP"
-cd /d C:\dev\BrowserForWP
-msbuild BrowserForWP.sln /p:Configuration=Debug /p:Platform=ARM /v:minimal
-```
-
-Then copy the repository back (or work from git) rather than building in place.
-A failure with no file path attached is almost always the toolchain, not the code.
+Both work. Building in place over `C:\Mac\Home\Documents\BrowserForWP` is what
+produced every artefact described in this file. Copying to local disk is worth
+trying when a failure carries *no file path attached at all*, but it is a
+diagnostic of last resort rather than a prerequisite — and on this repository it
+was never the cause. The advice below it was, in hindsight, a plausible guess
+that the next round's evidence did not support.
 
 ### Round 2 — what was fixed, and what is still open
 
@@ -237,42 +281,129 @@ Fixed by including the canonical file with a `Link`, so it ships at
 did not catch this**, because its "declared file exists" test only covered
 `.vb`/`.xaml`/`.resw`; it now covers every declared item, with a negative control.
 
-**Still open:**
+### Round 3 — the libraries compile, and fifty-four new errors
 
-1. `The referenced component 'BrowserForWP.Core' / '.Crypto' / '.Localization'
-could not be found`, and every type they define being `not defined`. This may
-still be unresolved, **or** it may be a consequence of the early failure aborting
-the build before the libraries were built. Round 3 settles it. If it persists,
-recreate each library in the IDE as a WP8.1 Class Library and re-add the sources.
-2. **The polyfill is packaged but never injected.** `compat.js` now ships in the
-app, but nothing reads it: `TridentEngine` has no injection code, only
-`InvokeScriptAsync`. The README claims the polyfill is "injected into every
-document before scripts run" — **that is not yet true.** Either implement
-injection on navigation (read from the app package, then
-`InvokeScriptAsync("eval", ...)` before the document scripts run) or soften the
-claim. Do not leave the README asserting a behaviour the code does not have.
+With the early abort gone, the build reached actual compilation and reported the
+real state of `BrowserForWP` and `BrowserForWP.Net`. `BrowserForWP.Core`,
+`.Crypto` and `.Localization` built there and then; `BrowserForWP.Net` produced
+**54 errors across 6 files**.
 
-### Known first-build risks
+They came from five distinct causes. None of them is visible to
+`tools/check-vb.mjs`, and four of the five are *VB-specific* traps that a
+transliteration from JavaScript walks straight into.
 
-The library project files for `BrowserForWP.Crypto`, `.Core`, `.Localization` and
-`.Net` were **hand-authored** and have never been validated by the WP8.1 targets.
-If the build reports `MSB4019` or an unrecognised project type, recreate the
-project in the IDE (File -> New -> Project -> Visual Basic -> Windows Phone Apps
--> Class Library) and add the existing `.vb` files to it. Expect to do this once
-per library; it is what "the SDK has not seen these files" means in practice.
+| Symptom | Real cause | Fix applied |
+| --- | --- | --- |
+| `BrowserForWP.Net` failed wholesale: `IDisposable`, `List`, `Encoding`, `ArgumentException`, `Math`, `Array`, `InvalidOperationException` all "not defined"; `BC36948` on every `Async`; `BC30665` on every `Throw` | `BrowserForWP.Net.vbproj` had **no `<Import Include>` ItemGroup** and none of the `OptionStrict`/`OptionInfer`/`OptionCompare` PropertyGroups, and closed with `Microsoft.VisualBasic.targets` instead of the XAML targets. The other three libraries have all of them. Every source file still *parsed*, so it read as broken code rather than a broken project. | Rewrote the project file on the `.Crypto` template: 16 `<Import Include>` entries plus the option groups and the XAML targets import. |
+| 24 errors in `ClientHelloBuilder.vb`: `BC30203` "identifier expected", then `U16`, `Bytes`, `Vec8`, `ToArray` "not declared" | **Leading-dot method chains** — `New TlsWriter().` at end of line, next call on the following line. That is legal from **VB 14 (VS2015)**; this is **VB 12 (VS2013)**, which has no implicit line continuation after a period. One syntax mistake, twenty-four errors, all naming the wrong thing. | Rewrote each chain as a `With` block with one call per line. |
+| `'SupportedVersions' is not a member of 'Integer'`, `'KeyShare' is not a member of 'Integer'`, `'Alpn' is not a member of 'Integer'` | A local variable named `extensionType` **shadowed the `ExtensionType` enum** — VB is case-insensitive. The compiler blames the enum member, not the local. | Renamed the local to `extType`. Same class of bug as `supported`/`Supported`, `tag`/`Tag`, `Default`/`DefaultTag`, `value`/`Value()`, `shared`/`Shared`. |
+| `'SubReaderVec24' is not a member of 'BrowserForWP.Net.Tls13.TlsReader'`, followed by a wall of `BC30574` late-binding errors | `TlsReader` only had `SubReaderVec16`. `Certificate`'s `certificate_list` is a 3-byte length (`RFC 8446 §4.4.2`). | Added `SubReaderVec24()`. |
+| `BC30390`: `WinRtCrypto.ToBuffer ... is not accessible in this context because it is 'Friend'` | Assembly-scoped `Friend` used from a *different* assembly. | Made `ToBuffer` (and `ToArray`) `Public`. |
+| `BC30002: Type 'CertificateVerifyInfo' is not defined`, in `CertificateValidator` | The class was **nested inside `ServerMessageParser`**; the referencing file named it unqualified. | Moved it to namespace level. |
+| `BC30456: 'Verify' is not a member of 'CryptographicEngine'` | The WinRT type exposes `VerifySignature`, not `Verify`. | Corrected. |
+| `BC30456: 'ASCII' is not a member of 'System.Text.Encoding'` | `Encoding.ASCII` is genuinely **absent** from the .NET for Windows Store apps profile (it needs `ASCIIEncoding`, which the profile removes). | Replaced with a local `AsciiBytes` helper that also rejects non-ASCII labels instead of silently transcoding them. |
+| `BC32006`: cannot convert `Char` to `Integer` | VB has no `Char`-to-`Integer` conversion under `Option Strict`. | `AscW`, as the error itself suggests. |
+| `BC30512: Long to Integer`, `BC30311: String to Windows.Networking.HostName`, `BC30290` local shadows its function, `BC30201` comment inside a continued array literal | `UInteger - Integer` widens to `Long`; `StreamSocket.ConnectAsync` needs a `HostName`; `Dim value(...)` inside `Function Value()`; a trailing `'` comment on a continued line inside `New Byte() {...}`. | `CInt(received)`, `New HostName(host)`, renamed the local, moved the comment out of the braces. |
 
-The most likely compile errors, in order of frequency:
+**The lesson worth keeping:** when a whole project fails at once, check whether it
+has the *project-level* imports and option groups that its siblings have. Every
+file parsing correctly is exactly what makes this look like a code problem.
 
-- **WinRT API availability.** `System.Security.Cryptography.SHA256`,
-  `HMACSHA256` and `RNGCryptoServiceProvider` do not exist in the
-  ".NET for Windows Store apps" profile. Use `WinRtCrypto`.
-  `RegexOptions.Compiled` is also unsupported.
-- **`Await` on `IAsyncAction` / `IAsyncOperation`.** VB supports this directly;
-  if the compiler objects, add
-  `Imports System.Runtime.InteropServices.WindowsRuntime` to the file.
+### Round 4 — the solution builds
+
+`BUILD_EXIT=0`, no `BC` errors, and the package set is produced. Two further
+defects were found and verified by experiment:
+
+1. **A XAML theme key that does not exist on WP8.1.** `MainPage.xaml` used
+   `Background="{ThemeResource TextBoxBackgroundThemeBrush}"`, a **Windows Phone
+   8.0 (Silverlight)** key. WP8.1 XAML does not define it, and the failure is a
+   non-fatal internal lookup error:
+
+   ```
+   Microsoft.Windows.UI.Xaml.Common.targets(327,9): Xaml Internal Error error
+   WMC9999: La chiave specificata non era presente nel dizionario.
+   ```
+
+   It does not fail the build, so the brush just stays unset at runtime and the
+   message survives review indefinitely. Verified by swapping the key to
+   `TextControlBackground`: the diagnostic disappears, and returns when the old
+   key is restored. `ApplicationPageBackgroundThemeBrush` *is* a valid WP8.1 key.
+
+2. **Ambiguous image assets.** The packaging step warned six times with
+   `APPX1621`: a mixture of `Assets\Logo.png` and `Assets\Logo.scale-240.png`
+   matching the same logical name. The manifest names the *logical* path, so the
+   base variants must be qualified too. Renamed every base asset to
+   `.scale-100.png` (what the WP8.1 template itself generates). Zero `APPX1621`
+   after the change. `python3 tools/make_logo.py` and the `.vbproj` `<Content>`
+   items were updated together — keep them in step.
+
+**Remaining warnings, all understood and accepted:** two × `BC40000` on
+`New ResourceLoader(ResourceMap)` in `Localizer.vb`. The suggested replacement,
+`ResourceLoader.GetForCurrentView(name)`, returns a **cached** loader, so it would
+silently stop honoring a runtime language change — which `Localizer` depends on.
+The deprecated constructor is the one with the semantics this code needs, the
+warning is a forward-compatibility note about a "TBD" future release that will
+never ship for WP8.1, and the alternative cannot be tested on a handset from here.
+A deliberate, documented trade-off.
+
+**`WMC9999` is intermittent and not fully explained.** It appears in most solution
+builds and not in others, with byte-identical sources; with
+`/p:BuildProjectReferences=false` it was absent once and present on a later
+identical run. What *is* established:
+
+- it is emitted from the XAML compiler's second pass (`XamlPreCompile`);
+- it never changes the exit code, and never prevents `App.xbf`, `MainPage.xbf`,
+  `BrowserForWP.exe` or the packages from being produced;
+- `App.xbf` and `MainPage.xbf` are **byte-identical** across every rebuild that
+  was hashed (`b7af0673a52d230302275b6c60fa2a64`, `817580f71c93802ca8818c328074ea85`);
+- four hypotheses were tested and eliminated: the `.resw` `PRIResource` items,
+  project-level PRI generation (`/p:GenerateProjectPriFile=false`),
+  `BuildingInsideVisualStudio`, and the Release configuration.
+
+Treat it as noise from the VS2013 XAML toolchain, not as a signal about the code.
+Do not "fix" source to chase it.
+
+### Still open
+
+1. **The polyfill is packaged but never injected.** `compat.js` now ships in the
+   app, but nothing reads it: `TridentEngine` has no injection code, only
+   `InvokeScriptAsync`. The README claims the polyfill is "injected into every
+   document before scripts run" — **that is not yet true.** Either implement
+   injection on navigation (read from the app package, then
+   `InvokeScriptAsync("eval", ...)` before the document scripts run) or soften the
+   claim. Do not leave the README asserting a behaviour the code does not have.
+
+### Error taxonomy
+
+The library project files are hand-authored. If one of them stops being
+recognised, recreate it in the IDE (File -> New -> Project -> Visual Basic ->
+Windows Phone Apps -> Class Library) and re-add the existing `.vb` files — that
+is what "the SDK has not seen this file" means in practice.
+
+Families actually observed, in order of how misleading they are:
+
+- **Project-level imports missing.** A whole project's types reporting "not
+  defined". See Round 3.
+- **VB 12 vs VB 14 syntax.** Leading-dot chains. `tools/check-vb.mjs` now flags
+  them; it could not before, and this was 24 errors in one file.
+- **Case-insensitive shadowing.** A local named after a type, property or
+  enclosing member. The error names the *type*, never the local.
+- **`Friend` across assemblies** (`BC30390`), and **nested classes** named
+  unqualified from another file (`BC30002`).
+- **Profile gaps.** `System.Security.Cryptography` does not exist in the
+  ".NET for Windows Store apps" profile — use `WinRtCrypto`.
+  `Encoding.ASCII` and `RegexOptions.Compiled` are absent too.
+  `tools/check-vb.mjs` now flags all three.
+- **XML comment hazards.** A `--` run inside a `<!-- -->` comment makes MSBuild
+  refuse to load a project (`MSB4025`), which surfaces from a solution build as
+  the unrelated-looking `MSB4078` "project file is not supported by MSBuild". An
+  unescaped `<0..2^24-1>` copied from an RFC grammar invalidates a `'''` doc
+  comment (`BC42304`). Both are now checked.
 - **Namespace duplication.** The full name is `<RootNamespace>.` plus the file's
   own `Namespace` block. `BrowserForWP.Crypto.vbproj` sets `RootNamespace` to
-  `BrowserForWP` precisely because its sources declare `Namespace Crypto`.
+  `BrowserForWP` precisely because its sources declare `Namespace Crypto`;
+  `BrowserForWP.Net.vbproj` must keep `BrowserForWP.Net` because its sources
+  import `BrowserForWP.Net.Tls13` and `BrowserForWP.Net.Http`.
 
 ## The loop
 
@@ -293,7 +424,7 @@ Then update the skill if any tool, command, file layout or constraint changed.
 - [ ] `node tools/gen-vectors.mjs` → `52 assertions, 0 failure(s)`
 - [ ] `python3 tools/make_logo.py` → all assets regenerated, no diff
 - [ ] Polyfill ES5 check passes
-- [ ] Visual Studio: `Debug | ARM` → `Build succeeded`
+- [ ] `tools\vm-build.cmd /t:Rebuild` in the guest → `BUILD_EXIT=0`, no `BC` errors
 - [ ] Test Explorer: `BrowserForWP.Crypto.Tests` all green
 - [ ] Handset: TLS probe reports `TLS 1.3`
 - [ ] Handset: switch the phone to Italian — **every** UI string changes; no

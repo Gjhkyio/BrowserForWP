@@ -84,12 +84,19 @@ Namespace Crypto
         End Function
 
         ''' <summary>Byte array to IBuffer. Note the method name: CreateFromByteArray.</summary>
-        Friend Shared Function ToBuffer(bytes As Byte()) As IBuffer
+        '''
+        ''' Public, not Friend: BrowserForWP.Net needs it for every WinRT crypto
+        ''' call it makes (Certificate construction, ImportPublicKey,
+        ''' CryptographicEngine.VerifySignature). Friend is assembly-scoped, so it
+        ''' was invisible there and produced BC30390 naming the method's own
+        ''' accessibility — read the error, not the call site.
+        Public Shared Function ToBuffer(bytes As Byte()) As IBuffer
             Return CryptographicBuffer.CreateFromByteArray(If(bytes, New Byte() {}))
         End Function
 
         ''' <summary>IBuffer to byte array, via the copy-out overload.</summary>
-        Friend Shared Function ToArray(buffer As IBuffer) As Byte()
+        ''' <remarks>See ToBuffer for why this is Public rather than Friend.</remarks>
+        Public Shared Function ToArray(buffer As IBuffer) As Byte()
             If buffer Is Nothing Then Return New Byte() {}
             Dim bytes As Byte() = Nothing
             CryptographicBuffer.CopyToByteArray(buffer, bytes)

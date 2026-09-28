@@ -57,25 +57,41 @@ SUPERSAMPLE = 3
 MASTER_SIZE = 720  # rendered once, then downsampled for every asset
 
 # ── Asset table: (file stem, width, height) ────────────────────────────────
-# Windows Phone 8.1 WinRT asset contract. "scale-240" variants are what the
-# .vbproj currently references; the unsuffixed ones are what the app manifest
-# names, so both are produced.
+# Windows Phone 8.1 WinRT asset contract.
+#
+# EVERY image is scale-qualified, including the base variant: the base is
+# `*.scale-100.png`, not `*.png`. This is what the WP8.1 app template itself
+# generates and it is not cosmetic.
+#
+# The app manifest names these assets by their LOGICAL path ("Assets\Logo.png").
+# The resource indexer resolves that through PRI to whichever qualified file
+# matches the device scale. Shipping BOTH an unqualified Logo.png and a
+# Logo.scale-240.png makes that resolution ambiguous on the 100-scale devices,
+# and the packaging build says so on every build:
+#
+#   warning APPX1621: A mixture of images matching logical name
+#   'Assets\Logo.png' exists in this project with and without the "scale" or
+#   "targetsize" qualifier specified. For predictable runtime behavior,
+#   explicitly specify the scale or target size in each image asset's file name.
+#
+# Renaming the base files to .scale-100 is the fix; the manifest is unchanged
+# because it was always referring to the logical name.
 ASSETS = [
-    ("StoreLogo", 50, 50),
+    ("StoreLogo.scale-100", 50, 50),
     ("StoreLogo.scale-240", 120, 120),
-    ("Square71x71Logo", 71, 71),
+    ("Square71x71Logo.scale-100", 71, 71),
     ("Square71x71Logo.scale-240", 170, 170),
-    ("SmallLogo", 44, 44),
+    ("SmallLogo.scale-100", 44, 44),
     ("SmallLogo.scale-240", 106, 106),
-    ("Logo", 150, 150),
+    ("Logo.scale-100", 150, 150),
     ("Logo.scale-240", 360, 360),
 ]
 
 # Composite assets: transparent canvas + centred mark at a given ratio.
 COMPOSITES = [
-    ("WideLogo", 310, 150, 0.72),
+    ("WideLogo.scale-100", 310, 150, 0.72),
     ("WideLogo.scale-240", 744, 360, 0.72),
-    ("SplashScreen", 480, 800, 0.58),
+    ("SplashScreen.scale-100", 480, 800, 0.58),
     ("SplashScreen.scale-240", 1152, 1920, 0.58),
 ]
 

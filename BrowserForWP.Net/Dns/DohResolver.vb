@@ -145,7 +145,7 @@ Namespace Dns
 
             ' QNAME: each label length-prefixed, terminated by a zero length.
             For Each label In host.TrimEnd("."c).Split("."c)
-                Dim bytes = Encoding.ASCII.GetBytes(label)
+                Dim bytes = AsciiBytes(label)
                 If bytes.Length = 0 OrElse bytes.Length > 63 Then
                     Throw New HttpProtocolException("invalid DNS label: '" & label & "'")
                 End If
@@ -160,6 +160,35 @@ Namespace Dns
             writer.Add(CByte(ClassInternet And &HFF))
 
             Return writer.ToArray()
+        End Function
+
+        ''' <summary>
+        ''' The bytes of an ASCII string, without relying on Encoding.ASCII.
+        '''
+        ''' System.Text.Encoding.ASCII is NOT available in the .NET for Windows
+        ''' Store apps profile this project targets — it is backed by
+        ''' ASCIIEncoding, which the profile removes — so the compiler rejects it
+        ''' with BC30456 ("'ASCII' is not a member of 'System.Text.Encoding'")
+        ''' even though the property exists in full .NET.
+        '''
+        ''' A DNS QNAME label is ASCII by definition, so anything above 0x7F is a
+        ''' caller error (an un-punycoded IDN) rather than something to quietly
+        ''' transcode: Encoding.UTF8 would produce different, wrong wire bytes for
+        ''' those labels instead of failing.
+        ''' </summary>
+        Private Shared Function AsciiBytes(text As String) As Byte()
+            Dim bytes(text.Length - 1) As Byte
+            For i As Integer = 0 To text.Length - 1
+                ' AscW, not CInt: VB has no Char-to-Integer conversion under
+                ' Option Strict (BC32006 tells you to use AscW explicitly).
+                Dim code = AscW(text(i))
+                If code > &H7F Then
+                    Throw New ArgumentException(
+                        "DNS labels must be ASCII; punycode the name first: '" & text & "'")
+                End If
+                bytes(i) = CByte(code)
+            Next
+            Return bytes
         End Function
 
         ''' <summary>

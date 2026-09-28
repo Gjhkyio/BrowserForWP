@@ -23,7 +23,7 @@ project's ambition.
 | Ship the **Firefox / Gecko** engine | Mozilla cancelled Firefox for Windows Phone in 2015. No binary ever shipped. | Same pluggable abstraction as above. |
 | **TLS 1.3** | Schannel on WP8.1 tops out at **TLS 1.2**, and the OS offers no API to raise it. | **Implemented from the RFCs, in managed code, on-device**: a complete TLS 1.3 client (`BrowserForWP.Net`) running over a raw `StreamSocket`, so the app's own network layer speaks TLS 1.3 today. |
 | **Modern HTTPS** | The system `WebView` negotiates whatever Schannel supports. | `Tls13Client` + DNS-over-HTTPS resolver + certificate pinning for the app's transport layer. |
-| **Modern web pages** | IE11 cannot parse or run modern JavaScript. | An on-device polyfill/transpilation pipeline injected into every page (`BrowserForWP.Core`), plus a compatibility diagnostic that tells you *why* a given site still fails. |
+| **Modern web pages** | IE11 cannot parse or run modern JavaScript. | An on-device ES5 compatibility bundle (`BrowserForWP.Polyfill`) plus a compatibility diagnostic that tells you *why* a given site failed. **The injection step is not written yet** — the bundle is packaged into the app but nothing loads it into a page. Listed under "what is not done" below. |
 | **No backend** | — | Every component — crypto, TLS, DNS, polyfills, history, localization — runs entirely on the handset. No server, no proxy service, no telemetry. |
 
 > **On the on-device loopback proxy idea:** Windows AppContainers block
@@ -32,8 +32,9 @@ project's ambition.
 > [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full constraint analysis.
 
 **Bottom line:** you get a genuinely modern *transport* layer (TLS 1.3, DoH,
-pinning) and a genuinely modern *content* layer (polyfills), on an unchanged
-*rendering* layer — because the rendering layer cannot be changed on this OS.
+pinning) on an unchanged *rendering* layer — because the rendering layer cannot
+be changed on this OS. The *content* layer (polyfills) is a validated bundle
+waiting on the injection code, not a working feature.
 The engine abstraction means the day you point this at a device with a real
 modern engine, the transport and content layers come with you.
 
@@ -51,8 +52,10 @@ modern engine, the transport and content layers come with you.
   or hijacked local resolver cannot break or redirect you.
 - **Certificate pinning** — user-managed per-site pins with explicit,
   reversible override.
-- **Polyfill injection** — a curated on-device compatibility layer is injected
-  into every document before scripts run.
+- **ES5 compatibility bundle** (`BrowserForWP.Polyfill/compat.js`) — written,
+  ES5-checked, and packaged into the app. **Not yet injected:** `TridentEngine`
+  exposes `InvokeScriptAsync` but nothing calls it on navigation, so the bundle
+  currently does nothing at runtime. See the disclosure below.
 - **Bilingual UI** — English and Italian, auto-selected from the phone's
   display language, with per-app override.
 - **Diagnostics** — a built-in probe that reports exactly which modern feature
@@ -145,22 +148,35 @@ step.
 That is a real statement about how much you should trust it, so here is the
 honest position rather than a boast:
 
-- **Nothing here has been compiled.** No Windows Phone 8.1 SDK and no Visual
-  Studio 2013 were available on the machine that wrote this, so the VB.NET has
-  never been through a real compiler. `tools/check-vb.mjs` performs the
-  mechanical checks that *can* be reproduced off-Windows, and it found genuine
-  defects — but it is not a compiler, and a green run does not mean it builds.
+- **It compiles.** The whole solution builds with MSBuild 12 / Visual Studio 2013
+  for `Debug|ARM` and `Release|ARM` inside an ARM64 Windows 11 guest, and
+  produces an installable package. Getting there took four rounds; the record of
+  every error family — and of the assumptions that were wrong — is in
+  [`docs/MAINTAINING.md`](docs/MAINTAINING.md).
+- **Off-Windows, `tools/check-vb.mjs` is a filter, not a verdict.** It runs
+  twelve categories of mechanical check on any machine and has found genuine
+  defects, but it does not type-check. Everything it cannot see has failed in
+  the guest while passing here: a `Friend` member used from another assembly, a
+  nested class named unqualified from a third file, a local variable shadowing a
+  type, and a XAML `{ThemeResource}` key that WP8.1 does not define.
 - **The crypto and the TLS 1.3 protocol are verified, but not on a handset.**
   `tools/gen-vectors.mjs` (52 assertions against RFC 5869/7748/8439/8448 and
   NIST AES-GCM), `tools/proto/w25519.mjs` (18 checks) and
   `tools/proto/tls13.mjs` (31 checks, completing real handshakes with Google,
   Cloudflare and example.com) all pass.
 - **It has never run on a phone.** XAML layout, WebView behaviour and
-  performance on 2014 hardware are unverified.
-- **A real build attempt was made and reported honestly.** The available
-  Windows VM is ARM64, where Microsoft does not support pre-17.4 Visual Studio
-  and where the WP8.1 SDK has no build targets. That is documented in
-  [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) instead of being quietly skipped.
+  performance on 2014 hardware are unverified. Compiling is not running.
+- **One advertised feature is not wired up.** The ES5 compatibility bundle is
+  written, checked and packaged, but **nothing injects it into a page** —
+  `TridentEngine` has no injection code. The README used to claim it was
+  "injected into every document before scripts run"; that was not true, and it
+  now says so instead.
+- **An earlier claim in this README was wrong, and here is the correction.** A
+  previous revision stated that the app could not be built, because the only
+  available Windows VM is ARM64 and Microsoft does not support pre-17.4 Visual
+  Studio on Arm processors. That documentation is accurate about the **IDE**; it
+  says nothing about the **command-line build**, which works. Nobody had tried
+  it. It was tried, and it builds.
 - **Claims were tested, and the false ones were dropped.** Chromium and Firefox
   cannot run on this OS and TLS 1.3 cannot be obtained from it; both facts are
   stated plainly rather than papered over. The work that *was* possible — a

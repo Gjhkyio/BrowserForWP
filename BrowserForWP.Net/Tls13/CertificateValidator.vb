@@ -194,7 +194,12 @@ Namespace Tls13
             Dim publicKey = provider.ImportPublicKey(WinRtCrypto.ToBuffer(certificateInfo.PublicKeyBlob))
 
             Try
-                Return CryptographicEngine.Verify(
+                ' VerifySignature, not Verify: the WinRT type exposes VerifySignature,
+                ' VerifySignatureWithHashInput and VerifySignatureWithHashInput, and
+                ' there is no method named Verify. BC30456 on a method that does not
+                ' exist is worth reading literally rather than assuming a signature
+                ' mismatch.
+                Return CryptographicEngine.VerifySignature(
                     publicKey,
                     WinRtCrypto.ToBuffer(signedContent),
                     WinRtCrypto.ToBuffer(info.Signature))

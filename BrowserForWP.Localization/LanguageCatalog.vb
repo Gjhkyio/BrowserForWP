@@ -20,8 +20,14 @@ Namespace Localization
         Private Sub New()
         End Sub
 
-        ''' <summary>The language used when nothing else applies. Never remove it.</summary>
-        Public Shared ReadOnly Property Default As String
+        ''' <summary>
+        ''' The language used when nothing else applies. Never remove it.
+        '''
+        ''' Named DefaultTag and not Default: Default is a VB keyword, and a member
+        ''' called Default produces BC30183 "invalid keyword as identifier" at the
+        ''' declaration and BC30456 "'Default' is not a member" at every use site.
+        ''' </summary>
+        Public Shared ReadOnly Property DefaultTag As String
             Get
                 Return "en-US"
             End Get
@@ -47,7 +53,7 @@ Namespace Localization
                     If tag IsNot Nothing Then Return tag
                 Next
             End If
-            Return Default
+            Return DefaultTag
         End Function
 
         ''' <summary>
@@ -86,8 +92,11 @@ Namespace Localization
             If String.IsNullOrEmpty(primary) OrElse primary = "iv" Then Return Nothing
             primary = primary.ToLowerInvariant()
 
-            For Each supported In SupportedTags
-                If supported.Split("-"c)(0).ToLowerInvariant() = primary Then Return supported
+            ' The loop variable must not be named `supported`: VB is case-insensitive,
+            ' so it collides with the Supported property and is rejected with BC30039
+            ' ("the loop control variable cannot be a property").
+            For Each supportedTag In SupportedTags
+                If supportedTag.Split("-"c)(0).ToLowerInvariant() = primary Then Return supportedTag
             Next
             Return Nothing
         End Function

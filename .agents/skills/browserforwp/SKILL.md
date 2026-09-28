@@ -51,9 +51,36 @@ TLS 1.2 through the OS. Anything that assumes otherwise is a plan error. See
 **Second hard constraint — the API surface.** A WP8.1 WinRT app compiles against
 the ".NET for Windows Store apps" profile, *not* desktop .NET. `SHA256`,
 `HMACSHA256` and `RNGCryptoServiceProvider` do **not exist** there; use
-`WinRtCrypto` (`Windows.Security.Cryptography.Core`). `RegexOptions.Compiled` is
-unsupported. Before introducing any `System.*` type, confirm it exists in that
-profile — do not assume a desktop API is available.
+`WinRtCrypto` (`Windows.Security.Cryptography.Core`). `RegexOptions.Compiled` and
+`Encoding.ASCII` are unsupported too, and `CryptographicEngine` exposes
+`VerifySignature`, never `Verify`. Before introducing any `System.*` type, confirm
+it exists in that profile — do not assume a desktop API is available.
+`tools/check-vb.mjs` flags this family; the list is not exhaustive, so the flag is
+a floor, not a ceiling.
+
+**Second-and-a-half — the language is VB 12, not VB 14.** The toolchain is Visual
+Studio 2013. Implicit line continuation after a `.` arrived in **VB 14 (VS2015)**,
+so the JavaScript-style fluent chain that reads so naturally is a syntax error
+here:
+
+```vb
+Dim w = New TlsWriter().
+    U8(1).
+    ToArray()
+```
+
+That is `BC30203` on the trailing dot, and then `U16`, `Bytes`, `Vec8` and
+`ToArray` all report "not declared" — 24 errors in one file, none of which names
+the real cause. Use a `With` block with one call per line; it reads the same and
+compiles. `tools/check-vb.mjs` catches this now, because it cost a whole round.
+
+**Second-and-three-quarters — VB is case-insensitive, so a local can shadow a
+type or a member.** `Dim extensionType = ...` next to the `ExtensionType` enum
+makes every `ExtensionType.X` in the file report "'X' is not a member of
+'Integer'", pointing at the enum and never at the local. The same trap produced
+`shared`/`Shared`, `supported`/`Supported`, `tag`/`Tag` (a `Page` property),
+`Default`/`DefaultTag` (a keyword), and `value` inside `Function Value()`
+(`BC30290`). Name locals after what they *hold*, not after the type.
 
 **Third — never edit `X25519.vb` or `BrowserForWP.Net/Tls13/` by hand.** Both
 are transliterations of executable prototypes, and those prototypes are the only
@@ -83,7 +110,7 @@ verified if you skipped its command.
 | `BrowserForWP.Polyfill/compat.js` | `node tools/check-polyfill.mjs` | `is valid ES5` |
 | Any `.vb`, `.vbproj`, `.xaml` or `.resw` | `node tools/check-vb.mjs` | `0 finding(s)`, exit code 0 |
 | `BrowserForWP/Assets/**` | `python3 tools/make_logo.py` | one line per generated PNG, exit code 0 |
-| UI / XAML / VB app code | Build in Visual Studio: `Debug \| ARM` | `Build succeeded` |
+| UI / XAML / VB app code | Build in the guest: `tools\vm-build.cmd /t:Rebuild` | `BUILD_EXIT=0`, no `BC` errors |
 | Crypto unit tests | Test Explorer → run `BrowserForWP.Crypto.Tests` | all tests green |
 | TLS / DoH / sockets | Deploy to handset, run **Diagnostics → TLS probe** | reports negotiated `TLS1.3` |
 
@@ -129,6 +156,8 @@ docs/ARCHITECTURE.md          ← design + the platform laws
 docs/MAINTAINING.md           ← build/run/extend recipes
 tools/gen-vectors.mjs         ← crypto verification (runs anywhere)
 tools/make_logo.py            ← regenerates every image asset
+tools/check-vb.mjs            ← 12 categories of static VB/XAML/project checks
+tools/vm-build.cmd            ← the real build, run inside the Windows guest
 ```
 
 Rule of thumb: **crypto knows nothing about TLS; TLS knows nothing about the
@@ -231,7 +260,10 @@ Same loop, but the diagnosis comes first.
   `node tools/gen-vectors.mjs`.
 - Work left uncommitted or unpushed.
 - Reporting `tools/check-vb.mjs` passing as "it compiles". It is a static checker,
-  not a compiler, and its own output says so.
+  not a compiler, and its own output says so. Run `tools\vm-build.cmd`.
+- Asserting that something "cannot be built" or "is not supported" without having
+  tried it. This repository has already paid for that mistake once: the README
+  claimed the ARM64 guest could not build, for three rounds, and it can.
 
 ## The loop — do all five steps, in order, every time
 
@@ -254,14 +286,48 @@ command, file layout or constraint, that fact belongs here before the turn ends.
 A skill describing a previous version of the project is actively harmful, because
 it is what the next contributor trusts.
 
-## Why there is no compiler here
+## How to build — there IS a compiler here
 
-The build host is an Apple silicon Mac. The Windows Phone 8.1 SDK is
-Windows-only, and the one available Windows VM is **ARM64** — Microsoft does not
-support pre-17.4 Visual Studio on Arm-based devices, and the WP8.1 SDK ships no
-Arm64 MSBuild targets. A real build therefore needs an **x64** Windows host; see
-`docs/MAINTAINING.md`.
+The development host is an Apple silicon Mac, so the sources are written
+off-platform. They are not uncompiled: an **ARM64 Windows 11 Parallels guest**
+hosts the whole VS2013 toolchain and builds the solution for real.
 
-This is why every non-trivial decision in this repo is backed by an executable
-prototype instead of a compile. That method found four real TLS bugs and one real
-compile error. Do not replace it with optimism.
+```bash
+prlctl exec "{66a2f493-162c-4b3f-ba40-0a26020cc818}" "cmd.exe" "/c" \
+    "C:\Mac\Home\Documents\BrowserForWP\tools\vm-build.cmd"
+```
+
+Expected tail: `=== BUILD_EXIT=0 ===`, with no `BC` errors. Add `/t:Rebuild` for a
+clean build; the batch file forwards extra arguments to MSBuild.
+
+Three things about that command, all of which cost time to learn:
+
+- **The command and its arguments must be separate argv entries.**
+  `prlctl exec <vm> "cmd /c ver"` fails *silently* — argv[0] becomes a program
+  named `cmd /c ver`. `--current-user` and `-u` fail on this guest too. This is
+  why the build is a batch file.
+- **Do not trust this guest's Italian build log for the first reading.**
+  `error BC30203: È previsto un identificatore` is "identifier expected";
+  `La chiave specificata non era presente nel dizionario` is "the given key was
+  not present in the dictionary". Grep for `error BC` / `error MSB` / `WMC`
+  rather than reading the prose.
+- **`WMC9999` is intermittent noise.** It appears in some solution builds and not
+  others, is non-fatal, never changes the exit code, and does not change the
+  compiled `.xbf` (verified byte-identical across rebuilds). Do not edit source
+  to chase it. See `docs/MAINTAINING.md`.
+
+A previous revision of this section claimed the ARM64 guest "cannot host this
+build" and that a real build needs an x64 host. **That was wrong.** It was
+inferred from Microsoft's "Visual Studio does not support Arm processors"
+documentation instead of from trying it; the documentation is about the IDE, not
+the command-line build. It is recorded here because the failure mode was
+assuming rather than testing, and that is the one this repo is supposed to be
+immune to.
+
+**How to use the two verification paths together.** `tools/check-vb.mjs` is fast
+and runs anywhere; the guest build is authoritative and slow. Run the checker
+first, then the build. But a green checker proves *nothing* about compilation —
+every error family in rounds 3 and 4 passed it. Before the guest round trip was
+discovered, every non-trivial decision had to be backed by an executable
+prototype; that method found four real TLS bugs and is still worth keeping for
+protocol work. It is no longer a substitute for compiling.

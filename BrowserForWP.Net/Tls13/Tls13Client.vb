@@ -29,6 +29,7 @@
 ' pages it loads are still bounded by Schannel's TLS 1.2. See docs/ARCHITECTURE.md.
 
 Imports System.Threading.Tasks
+Imports Windows.Networking
 Imports Windows.Networking.Sockets
 Imports Windows.Storage.Streams
 Imports BrowserForWP.Crypto
@@ -91,7 +92,13 @@ Namespace Tls13
             ' PlainSocket: raw TCP with no TLS. This is the entire point — see the
             ' file header. Using SocketProtectionLevel.Tls12 here would silently
             ' hand our handshake bytes to Schannel.
-            Await _socket.ConnectAsync(host, port.ToString(), SocketProtectionLevel.PlainSocket)
+            '
+            ' The first argument must be a Windows.Networking.HostName, not a
+            ' String: there is no (String, String, SocketProtectionLevel)
+            ' overload, and passing a String reports BC30311 "cannot convert
+            ' String to Windows.Networking.HostName".
+            Await _socket.ConnectAsync(New HostName(host), port.ToString(),
+                                       SocketProtectionLevel.PlainSocket)
 
             _writer = New DataWriter(_socket.OutputStream)
 
@@ -238,11 +245,16 @@ Namespace Tls13
             ' ── Finished (client) ───────────────────────────────────────────────
             Dim clientVerifyData = KeySchedule.ComputeFinished(
                 clientHandshakeKeys.FinishedKey, afterServerFinished)
-            Dim clientFinished = New TlsWriter().
-                U8(CInt(HandshakeType.Finished)).
-                U24(clientVerifyData.Length).
-                Bytes(clientVerifyData).
-                ToArray()
+            ' `With`, not a leading-dot chain: VB 12 rejects a line break after a
+            ' '.', and the resulting BC30203 plus phantom "X is not declared"
+            ' errors point at every method name instead of at the line break.
+            Dim finishedWriter As New TlsWriter()
+            With finishedWriter
+                .U8(CInt(HandshakeType.Finished))
+                .U24(clientVerifyData.Length)
+                .Bytes(clientVerifyData)
+            End With
+            Dim clientFinished = finishedWriter.ToArray()
             _transcript.Add(clientFinished)
 
             Await SendRecordAsync(_writeLayer.Seal(ContentType.Handshake, clientFinished))
@@ -454,7 +466,10 @@ Namespace Tls13
                         " bytes, had " & _inbound.Count & ")")
                 End If
 
-                Dim chunk(received - 1) As Byte
+                ' LoadAsync returns UInteger, and UInteger - Integer widens to
+                ' Long in VB, so `received - 1` is not a valid array bound
+                ' (BC30512, Long to Integer). Narrow it explicitly.
+                Dim chunk(CInt(received) - 1) As Byte
                 _reader.ReadBytes(chunk)
                 _inbound.AddRange(chunk)
             End While

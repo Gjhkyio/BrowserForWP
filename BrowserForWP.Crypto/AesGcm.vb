@@ -21,8 +21,12 @@
 ' exposes an accelerated implementation. CryptographicEngine.EncryptAndAuthenticate
 ' and DecryptAndAuthenticate explicitly support SymmetricAlgorithmNames.AesGcm.
 
-Imports System.Security.Cryptography
 Imports Windows.Security.Cryptography.Core
+' NOTE: System.Security.Cryptography is deliberately NOT imported. The namespace
+' is absent from the ".NET for Windows Store apps" profile, and importing it
+' produces BC40056 ("does not contain any public member or is not defined").
+' That also means CryptographicException is unavailable -- use a type from
+' mscorlib such as InvalidOperationException when a platform call misbehaves.
 
 Namespace Crypto
 
@@ -61,45 +65,50 @@ Namespace Crypto
             Dim provider = SymmetricKeyAlgorithmProvider.OpenAlgorithm(SymmetricAlgorithmNames.AesGcm)
             Dim symmetricKey = provider.CreateSymmetricKey(WinRtCrypto.ToBuffer(key))
 
-            ' EncryptAndAuthenticate appends the 16-byte AEAD tag to the ciphertext.
-            Dim combined = WinRtCrypto.ToArray(CryptographicEngine.EncryptAndAuthenticate(
+            ' EncryptAndAuthenticate returns EncryptedAndAuthenticatedData, whose
+            ' EncryptedData and AuthenticationTag are SEPARATE buffers. It does NOT
+            ' return one concatenated ciphertext||tag buffer; assuming that is what
+            ' produced BC30512 (implicit conversion from
+            ' EncryptedAndAuthenticatedData to IBuffer) and the late-binding errors
+            ' that followed it.
+            Dim result = CryptographicEngine.EncryptAndAuthenticate(
                 symmetricKey,
                 WinRtCrypto.ToBuffer(If(plaintext, New Byte() {})),
                 WinRtCrypto.ToBuffer(nonce),
-                WinRtCrypto.ToBuffer(If(aad, New Byte() {}))))
+                WinRtCrypto.ToBuffer(If(aad, New Byte() {})))
 
-            If combined.Length < TagSize Then
-                Throw New CryptographicException("platform provider returned a short AEAD result")
+            Dim ciphertext = WinRtCrypto.ToArray(result.EncryptedData)
+            Dim tag = WinRtCrypto.ToArray(result.AuthenticationTag)
+            If tag.Length <> TagSize Then
+                Throw New InvalidOperationException(
+                    "platform provider returned a " & tag.Length & "-byte AEAD tag, expected " & TagSize)
             End If
 
-            Dim ciphertext(combined.Length - TagSize - 1) As Byte
-            Array.Copy(combined, ciphertext, ciphertext.Length)
-            Dim tag(TagSize - 1) As Byte
-            Array.Copy(combined, combined.Length - TagSize, tag, 0, TagSize)
             Return New AeadResult(ciphertext, tag)
         End Function
 
         Public Shared Function Open(key As Byte(), nonce As Byte(), aad As Byte(),
                                     ciphertext As Byte(), tag As Byte()) As Byte()
             If tag Is Nothing OrElse tag.Length <> TagSize Then
-                Throw New CryptographicException("invalid GCM tag length")
+                Throw New ArgumentException("invalid GCM tag length", "tag")
             End If
 
             Dim provider = SymmetricKeyAlgorithmProvider.OpenAlgorithm(SymmetricAlgorithmNames.AesGcm)
             Dim symmetricKey = provider.CreateSymmetricKey(WinRtCrypto.ToBuffer(key))
 
-            Dim payload = If(ciphertext, New Byte() {})
-            Dim combined(payload.Length + TagSize - 1) As Byte
-            Array.Copy(payload, combined, payload.Length)
-            Array.Copy(tag, 0, combined, payload.Length, TagSize)
-
+            ' The order is (key, data, nonce, authenticationTag, authenticatedData).
+            ' The tag is its OWN argument and is NOT appended to the ciphertext;
+            ' concatenating them and passing four arguments is what produced
+            ' BC30455 ("argument not specified for parameter authenticatedData").
+            '
             ' DecryptAndAuthenticate raises on a tag mismatch, which is exactly the
             ' fail-closed behaviour the TLS record layer requires: a forged record
             ' must never reach the caller.
             Return WinRtCrypto.ToArray(CryptographicEngine.DecryptAndAuthenticate(
                 symmetricKey,
-                WinRtCrypto.ToBuffer(combined),
+                WinRtCrypto.ToBuffer(If(ciphertext, New Byte() {})),
                 WinRtCrypto.ToBuffer(nonce),
+                WinRtCrypto.ToBuffer(tag),
                 WinRtCrypto.ToBuffer(If(aad, New Byte() {}))))
         End Function
     End Class
