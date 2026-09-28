@@ -59,7 +59,12 @@ Namespace CoreTests
             ran += 1
 
             Dim appSettings As New AppSettings()
-            Check(appSettings.SearchUrlFor("hello world") = "https://duckduckgo.com/?q=hello%20world", "search url")
+            ' The default template is the LITE endpoint, so the expected value is the
+            ' lite URL. This assertion previously named the heavy duckduckgo.com
+            ' endpoint that the lite-first default replaced; it compiled, so only
+            ' running it would have caught the drift.
+            Check(appSettings.SearchUrlFor("hello world") = "https://lite.duckduckgo.com/lite/?q=hello%20world", "search url")
+            Check(appSettings.SearchUrlFor("hello world").StartsWith("https://lite.duckduckgo.com/"), "search default is lite")
             Dim hostMap As Dictionary(Of String, String) = appSettings.SaveToMap()
             Dim reloaded As New AppSettings()
             reloaded.LoadFromMap(hostMap)
