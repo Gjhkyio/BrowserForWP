@@ -132,6 +132,34 @@ Namespace Engine.Native
             Return generated
         End Function
 
+        ''' <summary>
+        ''' Collect the text of every inline style element, because the tree builder
+        ''' drops script and style bodies. Anything more would need a real head parser.
+        '''
+        ''' This lived as Private Shared inside MainPage until the native engine became
+        ''' a second caller of it. It is pure string work, its output is this class's
+        ''' input, and the page is the wrong place for it to live; tools/proto/boxtree.mjs
+        ''' transliterates it and asserts the same cases.
+        ''' </summary>
+        Public Shared Function PageCss(html As String) As String
+            If String.IsNullOrEmpty(html) Then Return String.Empty
+            Dim collected As New System.Text.StringBuilder()
+            Dim lowered As String = html.ToLowerInvariant()
+            Dim searchFrom As Integer = 0
+            While True
+                Dim openAt As Integer = lowered.IndexOf("<style", searchFrom, StringComparison.Ordinal)
+                If openAt < 0 Then Exit While
+                Dim bodyStart As Integer = lowered.IndexOf(">"c, openAt)
+                If bodyStart < 0 Then Exit While
+                Dim closeAt As Integer = lowered.IndexOf("</style", bodyStart)
+                If closeAt < 0 Then Exit While
+                collected.Append(html.Substring(bodyStart + 1, closeAt - bodyStart - 1))
+                collected.Append(vbLf)
+                searchFrom = closeAt + 1
+            End While
+            Return collected.ToString()
+        End Function
+
     End Class
 
 End Namespace

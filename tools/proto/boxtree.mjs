@@ -111,7 +111,12 @@ check('the result block exists', xaml.includes('ParseResult'));
 check('the handler uses the TLS 1.3 fetcher', main.includes('NetDocumentFetcher'));
 check('the handler runs the pipeline', main.includes('BuildPage'));
 check('the handler dumps the tree', main.includes('DocumentDumper'));
-check('the handler reads <style> text', main.includes('InlineStyleText'));
+// This asserted `InlineStyleText` until that helper moved to
+// BoxTreeBuilder.PageCss, where its output is consumed and where a second
+// caller (the native engine) could reach it. The assertion is about the page's
+// own stylesheet reaching the tree builder, so it follows the move rather than
+// being deleted.
+check('the handler reads <style> text', main.includes('BoxTreeBuilder.PageCss'));
 for (const key of ['ParseThisPage', 'ParseNoDocument', 'ParseFailed', 'ParseBoxCount']) {
   check(`${key} in en-US`, enRes.includes(`name="${key}"`));
   check(`${key} in it-IT`, itRes.includes(`name="${key}"`));
@@ -129,10 +134,49 @@ for (const key of ['IeModeCheck', 'IeModeReport']) {
   check(`${key} in it-IT`, itRes.includes(`name="${key}"`));
 }
 
+// ── Collecting the page's own stylesheet ────────────────────────────────────
+// Transliterated from BoxTreeBuilder.PageCss, which is where this belongs: it
+// was Private Shared inside MainPage until a second caller appeared (the native
+// engine), and the tree builder is the thing that consumes its output.
+function pageCss(html) {
+  if (!html) return '';
+  let out = '';
+  const lowered = html.toLowerCase();
+  let from = 0;
+  for (;;) {
+    const openAt = lowered.indexOf('<style', from);
+    if (openAt < 0) break;
+    const bodyStart = lowered.indexOf('>', openAt);
+    if (bodyStart < 0) break;
+    const closeAt = lowered.indexOf('</style', bodyStart);
+    if (closeAt < 0) break;
+    out += html.substring(bodyStart + 1, closeAt) + '\n';
+    from = closeAt + 1;
+  }
+  return out;
+}
+check('page css: no style element gives an empty sheet', pageCss('<p>hi</p>') === '');
+check('page css: one style element is collected',
+  pageCss('<style>p{color:red}</style>') === 'p{color:red}\n');
+check('page css: every style element is collected, in document order',
+  pageCss('<style>a{}</style><p>x</p><style>b{}</style>') === 'a{}\nb{}\n');
+check('page css: the tag is found in any case',
+  pageCss('<STYLE>p{}</STYLE>') === 'p{}\n');
+check('page css: attributes on the tag do not defeat it',
+  pageCss('<style type="text/css">p{}</style>') === 'p{}\n');
+check('page css: an unterminated element yields nothing, not the rest of the page',
+  pageCss('<style>p{}</p>') === '');
+
 // ── VB file parity (BoxTreeBuilder) ─────────────────────────────────────────
 const builder = readIfPresent('BrowserForWP.Core/Engine/Native/BoxTreeBuilder.vb');
 check('BoxTreeBuilder.vb exists', builder.length > 0);
 check('BoxTreeBuilder exposes BuildPage', builder.includes('BuildPage'));
+check('BoxTreeBuilder now owns the page stylesheet collector',
+  builder.includes('Function PageCss('));
+check('MainPage no longer owns it',
+  main.length === 0 || !main.includes('Function InlineStyleText('));
+check('MainPage calls the tree builder for it',
+  main.length === 0 || main.includes('BoxTreeBuilder.PageCss('));
 check('DocumentDumper.vb exists', readIfPresent('BrowserForWP.Core/Diagnostics/DocumentDumper.vb').length > 0);
 
 console.log(`\n${checks - failures}/${checks} boxtree checks passed.`);

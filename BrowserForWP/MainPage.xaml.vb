@@ -918,7 +918,7 @@ Public NotInheritable Class MainPage
                 Return
             End If
 
-            Dim boxTree As BoxNode = BoxTreeBuilder.BuildPage(response.Text, InlineStyleText(response.Text))
+            Dim boxTree As BoxNode = BoxTreeBuilder.BuildPage(response.Text, BoxTreeBuilder.PageCss(response.Text))
             ' Every user-visible word comes from the resw, including the unit: the
             ' plan wrote " box(es)" inline, which is exactly the hardcoded English
             ' this repository forbids.
@@ -966,7 +966,7 @@ Public NotInheritable Class MainPage
             Dim viewportPx As Double = NativePreviewHost.ActualWidth
             If viewportPx < 1 Then viewportPx = 360
 
-            Dim boxTree As BoxNode = BoxTreeBuilder.BuildPage(response.Text, InlineStyleText(response.Text))
+            Dim boxTree As BoxNode = BoxTreeBuilder.BuildPage(response.Text, BoxTreeBuilder.PageCss(response.Text))
             Dim measurer As New BrowserForWP.Rendering.XamlTextMeasurer()
             Dim laidOut As BrowserForWP.Core.Engine.Native.LayoutBox =
                 BrowserForWP.Core.Engine.Native.BlockLayout.Layout(boxTree, viewportPx, measurer)
@@ -1005,26 +1005,4 @@ Public NotInheritable Class MainPage
         End Try
     End Sub
 
-    ''' <summary>
-    ''' Collect the text of every inline style element, because the tree builder
-    ''' drops script and style bodies. Anything more would need a real head parser.
-    ''' </summary>
-    Private Shared Function InlineStyleText(html As String) As String
-        If String.IsNullOrEmpty(html) Then Return String.Empty
-        Dim collected As New System.Text.StringBuilder()
-        Dim lowered As String = html.ToLowerInvariant()
-        Dim searchFrom As Integer = 0
-        While True
-            Dim openAt As Integer = lowered.IndexOf("<style", searchFrom, StringComparison.Ordinal)
-            If openAt < 0 Then Exit While
-            Dim bodyStart As Integer = lowered.IndexOf(">"c, openAt)
-            If bodyStart < 0 Then Exit While
-            Dim closeAt As Integer = lowered.IndexOf("</style", bodyStart)
-            If closeAt < 0 Then Exit While
-            collected.Append(html.Substring(bodyStart + 1, closeAt - bodyStart - 1))
-            collected.Append(vbLf)
-            searchFrom = closeAt + 1
-        End While
-        Return collected.ToString()
-    End Function
 End Class
