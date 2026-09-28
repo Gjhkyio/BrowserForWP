@@ -94,9 +94,14 @@
   <ItemGroup>
     <Compile Include="Browser\AddressNormalizer.vb" />
     <Compile Include="Browser\BrowserSession.vb" />
+    <Compile Include="Browser\UserAgents.vb" />
     <Compile Include="Diagnostics\CompatibilityProbe.vb" />
+    <Compile Include="Diagnostics\TlsProbeCore.vb" />
     <Compile Include="Engine\IBrowserEngine.vb" />
     <Compile Include="Engine\TridentEngine.vb" />
+    <Compile Include="Storage\AppSettings.vb" />
+    <Compile Include="Storage\FavoritesStore.vb" />
+    <Compile Include="Storage\HistoryStore.vb" />
   </ItemGroup>
   <ItemGroup>
     <Import Include="Microsoft.VisualBasic" />
