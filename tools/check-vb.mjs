@@ -34,6 +34,7 @@
 //   11. VB 12 syntax           no leading-dot line continuation (VS2015 and later)
 //   12. Profile hazards        APIs absent from .NET for Windows Store apps
 //   13. Comment hazards        '--' in XML comments, unescaped '<' in doc comments
+//   14. Project flavour        the flavour GUID the IDE uses to resolve references
 //
 //  WHAT IT CANNOT DO
 //  -----------------
@@ -314,7 +315,14 @@ function readProject(file) {
     .map((m) => m[2].replace(/\\/g, '/'));
   const refs = [...xml.matchAll(/<ProjectReference Include="([^"]+)"/g)]
     .map((m) => m[1].replace(/\\/g, '/'));
-  return { rootNamespace, assemblyName, declaredItems, refs };
+  // The project FLAVOUR and the target platform are two separate statements, and
+  // a project can make them disagree without either looking wrong on its own.
+  // See checkProjectFlavor().
+  const projectTypeGuids = (xml.match(/<ProjectTypeGuids>([^<]*)</) || [, ''])[1].trim();
+  const targetPlatformIdentifier = [...xml.matchAll(/<TargetPlatformIdentifier>([^<]*)</g)]
+    .map((m) => m[1].trim());
+  return { rootNamespace, assemblyName, declaredItems, refs, projectTypeGuids,
+    targetPlatformIdentifier };
 }
 
 const projectFiles = walk(ROOT, (f) => f.endsWith('.vbproj'));
@@ -420,6 +428,110 @@ function checkProjectParity() {
     }
   }
   if (!anyBad) ok('every .vb/.xaml/.resw is declared, and every declaration exists');
+}
+
+// ── 14. Project flavour (Windows Phone 8.1 vs Windows Store) ────────────────
+// The first GUID in ProjectTypeGuids is the project FLAVOUR. It is read by the
+// IDE's project system, not by MSBuild, and a Windows Phone 8.1 app may only
+// resolve references to projects of the same flavour.
+//
+// This solution's libraries carried {BC8A1FFA-...}, the WINDOWS STORE flavour,
+// while declaring TargetPlatformIdentifier WindowsPhoneApp. Each file therefore
+// looked right on its own, and the guest build stayed green: MSBuild compares
+// neither GUID. The IDE, which does, reported
+//
+//     The referenced component 'BrowserForWP.Core' could not be found.
+//
+// once per reference, naming projects that were present, correct and already
+// built. Two things identify the message as the project system's and not the
+// compiler's: it carries no diagnostic code (every BC and MSB failure does), and
+// the English string occurs nowhere under MSBuild, the Windows Phone 8.1 SDK or
+// the Windows Kits on the guest -- so no build here can reproduce or refute it.
+// That is also why tools/vm-build.cmd never saw it.
+//
+// The authoritative values are the VS2013 templates on the guest:
+//
+//   ProjectTemplates\VisualBasic\Windows Phone 8.1\1033\
+//       WindowsPhoneClassLibrary\ClassLibrary.vbproj      {76F1466A-...}
+//   ProjectTemplates\VisualBasic\Windows Phone 8.1\1033\
+//       WindowsPhoneBlankApplication\Application.vbproj    {76F1466A-...}
+//   ProjectTemplates\VisualBasic\Windows Store\1033\
+//       ClassLibrary_WindowsStoreApps\ClassLibrary.vbproj  {BC8A1FFA-...}
+//
+// The app template and the Windows Phone 8.1 class library template agree, which
+// is the whole rule: a WindowsPhoneApp project uses the 76F1466A flavour.
+//
+// The .sln records a project type GUID per project as well, and it is checked too
+// so the two files cannot tell different stories. It is a hint rather than the
+// deciding field: in this VS2013 installation neither the phone nor the Store
+// flavour GUID is registered as a project factory under
+//
+//   HKLM\SOFTWARE[\WOW6432Node]\Microsoft\VisualStudio\12.0\Projects
+//
+// where only {F184B08F-C81C-45F6-A57F-5ABD9991F28F} (VB) appears, so the loader
+// resolves these projects through the project file. That is also why no MSBuild
+// build can see any of it.
+
+const WP81_FLAVOR_GUID = '{76F1466A-8B6D-4E39-A767-685A06062A39}';
+const WINDOWS_STORE_FLAVOR_GUID = '{BC8A1FFA-BEE3-4634-8014-F334798102B3}';
+
+function checkProjectFlavor() {
+  heading('Project flavour (WindowsPhoneApp vs Windows Store)');
+  checksRun++;
+  let anyBad = false;
+
+  for (const project of projects) {
+    const guids = project.projectTypeGuids.toUpperCase();
+    const phoneTarget = project.targetPlatformIdentifier.includes('WindowsPhoneApp');
+
+    if (guids.includes(WINDOWS_STORE_FLAVOR_GUID)) {
+      const also = phoneTarget
+        ? ' This project also declares TargetPlatformIdentifier WindowsPhoneApp, so the ' +
+          'two statements contradict each other.'
+        : '';
+      fail('project-flavor', project.file,
+        `ProjectTypeGuids carries the Windows Store flavour ${WINDOWS_STORE_FLAVOR_GUID}.` +
+        also +
+        ' The IDE reads the flavour, so a Windows Phone 8.1 app cannot resolve a reference ' +
+        'to this project: its error list says the referenced component could not be found, ' +
+        'naming a project that is present, correct and already built. No build catches this ' +
+        `because MSBuild never reads ProjectTypeGuids. Use ${WP81_FLAVOR_GUID}, the value the ` +
+        'Windows Phone 8.1 class library template writes.');
+      anyBad = true;
+    } else if (phoneTarget && !guids.includes(WP81_FLAVOR_GUID)) {
+      fail('project-flavor', project.file,
+        'declares TargetPlatformIdentifier WindowsPhoneApp but does not carry the Windows ' +
+        `Phone 8.1 flavour GUID ${WP81_FLAVOR_GUID} in ProjectTypeGuids. The IDE keys on the ` +
+        'flavour GUID, so the app cannot resolve this project as a reference.');
+      anyBad = true;
+    }
+  }
+  // The same statement in the solution file. See the comment above: the .sln
+  // GUID is a hint, but a .sln that says Windows Store for a project whose
+  // .vbproj now says Windows Phone is a trap for the next reader.
+  const slnFile = path.join(ROOT, 'BrowserForWP.sln');
+  if (fs.existsSync(slnFile)) {
+    const byPath = new Map(projects.map((p) => [rel(p.file), p]));
+    fs.readFileSync(slnFile, 'utf8').split(/\r?\n/).forEach((raw, idx) => {
+      const m = /^Project\("\{([^"]+)\}"\) = "([^"]+)", "([^"]+)", "\{([^"]+)\}"/.exec(raw);
+      if (!m) return;                                     // not a project line
+      const declaredPath = m[3].replace(/\\/g, '/');
+      if (!declaredPath.endsWith('.vbproj')) return;      // solution folders
+      const project = byPath.get(declaredPath);
+      if (project === undefined) return;                  // reported by group 3
+      const slnGuid = `{${m[1].toUpperCase()}}`;
+      if (slnGuid !== WP81_FLAVOR_GUID) {
+        fail('project-flavor', slnFile,
+          `the solution declares ${m[2]} with project type ${slnGuid}, while the project ` +
+          `carries ${project.projectTypeGuids}. Give both the Windows Phone 8.1 flavour ` +
+          `${WP81_FLAVOR_GUID}: a solution that says Windows Store for a Windows Phone project ` +
+          'invites the next reader to "fix" the project file the wrong way, which is how the ' +
+          'four reference warnings were introduced.', idx + 1);
+        anyBad = true;
+      }
+    });
+  }
+  if (!anyBad) ok('every project, in the .vbproj and in the .sln, carries the Windows Phone 8.1 flavour GUID');
 }
 
 // ── 4. Implements completeness ──────────────────────────────────────────────
@@ -868,6 +980,7 @@ for (const project of projects) {
 }
 
 checkProjectParity();
+checkProjectFlavor();
 checkNamespacesAndImports();
 checkImplements();
 checkResourceParity();
@@ -888,7 +1001,7 @@ if (findings.length > 0) {
   }
   process.exit(1);
 }
-console.log('\nNo mechanical defects found in the thirteen checked categories.');
+console.log('\nNo mechanical defects found in the fourteen checked categories.');
 console.log('This still does NOT mean the project compiles. Build it for real:');
 console.log('');
 console.log('  prlctl exec "{66a2f493-162c-4b3f-ba40-0a26020cc818}" "cmd.exe" "/c" \\');
