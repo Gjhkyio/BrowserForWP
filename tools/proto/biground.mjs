@@ -84,10 +84,13 @@ for (const t of ['de-DE', 'fr-FR', 'es-ES', 'ja-JP']) check('catalog has ' + t, 
 const vbproj = read('BrowserForWP/BrowserForWP.vbproj');
 for (const t of ['de-DE', 'fr-FR', 'es-ES', 'ja-JP']) check('vbproj has ' + t, vbproj.includes(t));
 
-// ── resw: 83 keys everywhere ──
+// ── resw: 104 keys everywhere ──
 const NEWKEYS = ['SavePage', 'SavedPages', 'SavedDelete', 'TextSize', 'Images', 'SpeedDial',
   'SpeedDialAdd', 'SpeedDialRemove', 'Backup', 'Restore', 'BackupDone', 'Retry'];
-const DEADKEYS = ['SearchEngineLabel', 'ParseThisPage', 'ParseFailed', 'ParseBoxCount', 'IeModeCheck', 'IeModeReport'];
+const DEADKEYS = ['SearchEngineLabel', 'ParseThisPage', 'ParseFailed', 'ParseBoxCount',
+  'EngineNative', 'EngineReasonSettingNative'];
+const REMOTEKEYS = ['EngineRemote', 'RemoteUseServer', 'RemoteKeys', 'KeyTab', 'KeyEnter',
+  'RemoteNotice', 'RemoteServerLabel', 'RemoteTokenLabel'];
 const LANGS = ['en-US', 'it-IT', 'de-DE', 'fr-FR', 'es-ES', 'ja-JP'];
 const keysets = {};
 for (const lang of LANGS) {
@@ -97,7 +100,7 @@ for (const lang of LANGS) {
 }
 if (LANGS.every((l) => keysets[l].size > 0)) {
   const ref = [...keysets['en-US']].sort();
-  check('en-US has 83 keys (got ' + ref.length + ')', ref.length === 83);
+  check('en-US has 104 keys (got ' + ref.length + ')', ref.length === 104);
   for (const lang of LANGS.slice(1)) {
     const missing = ref.filter((k) => !keysets[lang].has(k));
     const extra = [...keysets[lang]].filter((k) => !keysets['en-US'].has(k));
@@ -106,6 +109,7 @@ if (LANGS.every((l) => keysets[l].size > 0)) {
   }
   for (const k of NEWKEYS) check('new key ' + k, keysets['en-US'].has(k));
   for (const k of DEADKEYS) check('dead key gone: ' + k, !keysets['en-US'].has(k));
+  for (const k of REMOTEKEYS) check('remote key kept: ' + k, keysets['en-US'].has(k));
 }
 
 if (n) { console.log('\n' + n + ' biground failure(s).'); process.exit(1); }
