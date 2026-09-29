@@ -1,7 +1,12 @@
 # Plan — the four "referenced component could not be found" warnings
 
 Date: 2026-09-28
-Status: implemented
+Status: implemented, with one correction: the rule this plan gives for the `.sln`
+entries (`{76F1466A-...}` there too) was wrong and was replaced in Round 12 — the
+`.sln` names a project *factory*, and `{F184B08F-...}` is the only one this VS2013
+registers. See `docs/MAINTAINING.md` Round 12 and
+`docs/superpowers/plans/2026-09-29-solution-loadability.md`. Everything this plan
+says about the `.vbproj` flavour GUID stands.
 
 ## The report
 

@@ -1044,10 +1044,15 @@ reg query "HKLM\SOFTWARE[\WOW6432Node]\Microsoft\VisualStudio\12.0" /s /f "<guid
 Only `{F184B08F-C81C-45F6-A57F-5ABD9991F28F}` is registered there, as the VB
 project factory (under `Projects` and `LocalData`). Neither flavour GUID appears
 anywhere in the VS2013 hive, so a `.sln` entry cannot select a Store or Phone
-factory on its own and the project file is what the loader falls back to. That
-makes the `.sln` a consistency fix rather than the cure; it is made anyway, because
-a solution that calls a Windows Phone project a Windows Store one is the trap that
-produced the defect in the first place.
+factory on its own.
+
+**CORRECTED in Round 12 — what followed here was wrong.** It continued "and the
+project file is what the loader falls back to", and concluded that the `.sln` was
+a consistency fix rather than a cure. There is no fallback. A solution whose
+`Project` lines name an unregistered factory loads **no project at all**, and a
+registry query settles which factories exist, not what the loader does with a name
+that is not among them. Round 12 measured it and moved the `.sln` to
+`{F184B08F-...}`; the flavour stays in the `.vbproj`, which is the other rule.
 
 **Fixed** by swapping the flavour GUID in `BrowserForWP.Core`, `.Crypto`,
 `.Localization`, `.Net` and both test libraries, and in the seven `Project`
@@ -1367,6 +1372,98 @@ the system keyboard, that a keystroke arrives after it, that the keys bar's butt
 press what they say, and that a rotation keeps the keyboard up are all unrun — see
 the blank rows in § "The remote engine, verified by hand".
 
+### Round 12 — the solution an IDE can load, and the comment that broke a project
+
+**Reported:** opening `BrowserForWP.sln` in a tool that is not Visual Studio — a
+solution selector on macOS — lists `(0 projects)`, with every project beside it
+marked `(unavailable)`. The projects themselves were fine: six configurations
+`BUILD_EXIT=0`. Both differences from a loadable solution are in the *text* of the
+solution file.
+
+**The `.sln` names a project factory, and a name that is not registered is not a
+hint, it is an empty solution.** Round 6 put `{76F1466A-...}`, the Windows Phone
+8.1 *flavour*, in all seven `Project` lines, reading the registry and concluding
+the loader ignored the field. The registry shows which factories exist. What the
+loader *does* with an unregistered name was never measured until now, and the
+oracle is the IDE's own loader — `devenv.com` uses the project system, not MSBuild:
+
+```
+# .sln says {76F1466A-8B6D-4E39-A767-685A06062A39} in the seven Project lines
+Build: 0 succeeded or up-to-date, 0 failed, 0 skipped     <- no project loaded
+
+# .sln says {F184B08F-C81C-45F6-A57F-5ABD9991F28F}
+Build: 7 succeeded, 0 failed, 0 up-to-date, 0 skipped
+```
+
+One field apart, everything else identical. `MSBuild` reads neither the GUID nor
+the separator, which is why no round of guest builds could see the difference, and
+the lessons sit on opposite sides of the same file: the **`.vbproj` carries the
+flavour** (Round 6, still right), the **`.sln` carries the factory** (this round,
+and the reason is that VS2013 registers only `{F184B08F-...}` while resolving a
+solution entry through whatever factory it names).
+
+**Second defect, found while measuring the first.** With the solution loading,
+the IDE's project system took six of the seven projects and refused
+`BrowserForWP.Crypto` with
+
+```
+BrowserForWP.Crypto.vbproj : error  : The application for the project is not installed.
+```
+
+which carries no diagnostic code, so every build on this project stayed green while
+the project could not be opened — the same blind spot as Round 6, one layer down.
+It is not the name, the path or the surrounding solution. Bisected on the guest,
+each row one `devenv.com /build` run against a one-project solution:
+
+| Variant of `BrowserForWP.Crypto.vbproj` | Loads? |
+| --- | --- |
+| untouched | no |
+| byte-identical copy under another file name | no |
+| every XML comment removed | **yes** |
+| comment block N removed, for each N in turn | only N = 2 loads |
+| comments intact, the two mentions inside block 2 reworded | **yes** |
+| block 2 removed, one mention added to a leading comment | no |
+
+The last two rows are the finding. That file is the only project here whose
+comments named the flavour property, and the name is what the IDE keys on: **the
+Windows Phone project factory locates that property by scanning the project file
+as TEXT, not by parsing it as XML, so the first occurrence of the name is the one
+it reads.** In `BrowserForWP.Crypto.vbproj` the comment's mention came first, the
+real element second; the scan read the first, the flavour came back empty, and the
+project was refused. This is why the word cannot appear in prose here, and why it
+is written as "the flavour property" everywhere else.
+
+**Fixed:** all seven `Project` lines in `BrowserForWP.sln` moved to
+`{F184B08F-C81C-45F6-A57F-5ABD9991F28F}` and to `/` separators — a backslash is an
+ordinary character in a file name on any host that is not Windows, so the project
+could not be found even with the GUID right. The offending comment in
+`BrowserForWP.Crypto.vbproj` now says "the flavour property" and carries the reason,
+so nobody restores the name as a kindness.
+
+**Enforced** by group 14 of `tools/check-vb.mjs`, three rules in one group: the
+flavour GUID wherever `TargetPlatformIdentifier` is `WindowsPhoneApp`; a registered
+factory GUID and `/` separators in the `.sln`; and the flavour property's name
+nowhere ahead of its element, comments included. Negative controls run for the two
+new rules — reverting the `.sln` to the flavour GUID produces 8 findings, one added
+mention in a comment produces the third.
+
+**Verified:** `check-vb.mjs` 16 groups over 17 categories, 0 finding(s), with both
+negative controls red; all 20 referees in `tools/proto/` green (`remote-protocol`
+91/91, `remote-input` 7/7, `remote-servers` 19/19, `engine-choice` 23/23,
+`core-logic` 66 assertions, `boxtree` 48/48, `csscascade` 47/47, the rest unchanged);
+six configurations `BUILD_EXIT=0` carrying only the two deliberate `BC40000`
+warnings; and `devenv.com BrowserForWP.sln /build "Debug|ARM"` — the IDE loading
+and building every project — `Build: 7 succeeded, 0 failed`.
+**Not verified:** the selector the report came from. No Visual Studio, and no
+solution reader other than `devenv.com`, runs on this machine; what is measured is
+the project system those tools hand the file to, not the tool itself.
+
+**Noticed while measuring it:** `devenv` rewrites the projects it opens — BOM, CRLF
+line endings and a `<Folder Include="My Project\" />` item appear in whichever
+`.vbproj` files it touched, and on an earlier run they nearly went into a commit.
+Revert them (`git checkout -- <file>`), or a round that only meant to change the
+solution will also rewrite four project files.
+
 ## The loop
 
 Every change follows five steps, in order. The canonical version lives in
@@ -1402,7 +1499,7 @@ What is and is not covered:
 | `tools/proto/remote-protocol.mjs` | The render protocol's wire format: header, every encoder and decoder, the frame splitter, and the AEAD seal both ways, checked byte-for-byte against `protocol/vectors.json` — which the SERVER's own code produced. The only statement of the protocol that neither implementation wrote. 91 checks. | `node`, on any machine. |
 | `tools/proto/remote-servers.mjs` | `RemoteServers.vb`: url normalisation, the primary/secondary order, duplicate collapsing, and the source contract that Core holds resource keys and not prose. | `node`, on any machine. |
 | `tools/proto/engine-choice.mjs` | The `EngineChoice` decision table, plus the source contract around it: the constants by name, and the reasons as resource keys rather than sentences. | `node`, on any machine. |
-| `tools/check-vb.mjs` | 17 categories / 16 check groups over every `.vb`, `.vbproj`, `.xaml` and `.resw`, including every `{ThemeResource}` key, every project's flavour GUID, (group 13) doc-comment structure, (group 15) every privileged API name and every manifest capability that would ask the platform for something it cannot grant, (group 16) every API whose capability the manifest fails to declare, and (group 17) every declaration that names a VB keyword. | `node`, on any machine. |
+| `tools/check-vb.mjs` | 17 categories / 16 check groups over every `.vb`, `.vbproj`, `.xaml` and `.resw`, including every `{ThemeResource}` key, every project's flavour GUID and the factory GUID and separators of every `BrowserForWP.sln` entry, (group 13) doc-comment structure, (group 15) every privileged API name and every manifest capability that would ask the platform for something it cannot grant, (group 16) every API whose capability the manifest fails to declare, and (group 17) every declaration that names a VB keyword. | `node`, on any machine. |
 | `tools/keyword-probe/`, `tools/keyword-probe.cmd` | One `Dim <word> As Integer` per candidate, compiled by the real vbc, so group 17's list is measured rather than quoted. Batched, with a per-batch sentinel, because vbc 12 stops after about a hundred errors **with no message** and the first single-file version read that truncation as "legal". | `bash`, with the guest reachable. |
 | `tools/wp81-theme-keys.sh` | Regenerates `tools/wp81-theme-keys.txt`, the 523 theme-resource keys Windows Phone 8.1 defines, read from the guest's design dictionaries. | `bash`, with the guest reachable. |
 | `tools/vm-build.cmd` | The real compiler, and the arbiter of pass/fail. | The Windows guest. |

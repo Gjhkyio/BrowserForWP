@@ -30,8 +30,21 @@
          changes no build. It is NOT what makes this project resolvable as a
          reference, and an earlier revision of this comment said it was: the
          component that decides that is the project system in the IDE, and it
-         reads ProjectTypeGuids, not this property. See the note on
-         ProjectTypeGuids below. -->
+         reads the flavour property below, not this one.
+
+         THE PROPERTY BELOW IS DELIBERATELY NOT NAMED HERE. Naming it in a
+         comment breaks the project, and not in a way any build can see: the
+         IDE's Windows Phone project factory locates that property by scanning
+         this file as TEXT, not by parsing it as XML, so the first occurrence of
+         the name is the one that counts. An occurrence inside a comment, ahead
+         of the real element, makes the flavour come back empty, and the IDE
+         answers by refusing the whole project with
+         "The application for the project is not installed." It carries no
+         diagnostic code, it comes from a component MSBuild never runs, and
+         every configuration here stays green. Measured on the guest: this file
+         with only those two words taken out of this comment loads and builds,
+         and an otherwise untouched file with one added mention in a leading
+         comment stops loading. tools/check-vb.mjs group 14 enforces it. -->
     <TargetPlatformIdentifier>WindowsPhoneApp</TargetPlatformIdentifier>
     <MinimumVisualStudioVersion>12</MinimumVisualStudioVersion>
     <FileAlignment>512</FileAlignment>

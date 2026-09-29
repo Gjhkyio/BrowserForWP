@@ -494,22 +494,41 @@ function checkProjectParity() {
 // The app template and the Windows Phone 8.1 class library template agree, which
 // is the whole rule: a WindowsPhoneApp project uses the 76F1466A flavour.
 //
-// The .sln records a project type GUID per project as well, and it is checked too
-// so the two files cannot tell different stories. It is a hint rather than the
-// deciding field: in this VS2013 installation neither the phone nor the Store
-// flavour GUID is registered as a project factory under
+// The .sln records a project type GUID per project as well, and it is checked
+// too -- but it is a DIFFERENT field with a DIFFERENT rule, and the two must not
+// be confused. VS writes the flavour GUID there when it creates the entry; the
+// loader, however, resolves a project through the factory that GUID names, and
+// in this VS2013 installation
 //
 //   HKLM\SOFTWARE[\WOW6432Node]\Microsoft\VisualStudio\12.0\Projects
 //
-// where only {F184B08F-C81C-45F6-A57F-5ABD9991F28F} (VB) appears, so the loader
-// resolves these projects through the project file. That is also why no MSBuild
-// build can see any of it.
+// registers neither the phone ({76F1466A-...}) nor the Store ({BC8A1FFA-...})
+// flavour, only {F184B08F-...}, the plain VB language GUID. A .sln naming an
+// unregistered factory loads as an EMPTY solution: every project listed with
+// "(unavailable)" beside it and a count of zero.
+//
+// Measured on the guest, one field apart, everything else identical:
+//
+//   devenv.com BrowserForWP.sln /build "Debug|ARM"
+//     .sln says {76F1466A-...}  ->  Build: 0 succeeded or up-to-date, 0 failed,
+//                                   0 skipped   (no project was loaded at all)
+//     .sln says {F184B08F-...}  ->  Build: 6 succeeded, 0 failed
+//
+// MSBuild never reads the field, so tools/vm-build.cmd and all six
+// configurations are green either way: it is invisible to the build and decisive
+// for the IDE. That is exactly why it needs a check rather than a note.
+//
+// The paths get the same treatment. `BrowserForWP/BrowserForWP.vbproj` instead of
+// `BrowserForWP\BrowserForWP.vbproj`, because on a host that is not Windows a
+// backslash is an ordinary character in a file name: the tool asking for the
+// project cannot find it even once the GUID resolves.
 
 const WP81_FLAVOR_GUID = '{76F1466A-8B6D-4E39-A767-685A06062A39}';
 const WINDOWS_STORE_FLAVOR_GUID = '{BC8A1FFA-BEE3-4634-8014-F334798102B3}';
+const VB_PROJECT_TYPE_GUID = '{F184B08F-C81C-45F6-A57F-5ABD9991F28F}';
 
 function checkProjectFlavor() {
-  heading('Project flavour (WindowsPhoneApp vs Windows Store)');
+  heading('Project flavour (WindowsPhoneApp vs Windows Store) and solution loadability');
   let anyBad = false;
 
   for (const project of projects) {
@@ -538,9 +557,44 @@ function checkProjectFlavor() {
       anyBad = true;
     }
   }
-  // The same statement in the solution file. See the comment above: the .sln
-  // GUID is a hint, but a .sln that says Windows Store for a project whose
-  // .vbproj now says Windows Phone is a trap for the next reader.
+  // The project file's own text, and this is the trap worth a check of its own: the
+  // IDE's Windows Phone project factory locates ProjectTypeGuids by SCANNING THE
+  // FILE AS TEXT, not by parsing it as XML. The first occurrence of the name is the
+  // one that counts, so a mention inside a comment ahead of the real element shadows
+  // it, the flavour reads as empty, and the IDE refuses the whole project with
+  //
+  //     The application for the project is not installed.
+  //
+  // -- a message with no diagnostic code, from a component MSBuild never runs, which
+  // is why every configuration can stay green while the project cannot be opened.
+  // This is not hypothetical: it is what BrowserForWP.Crypto did, and the file was
+  // otherwise correct. Measured on the guest, one word apart: with the two mentions
+  // taken out of that comment the project loads and builds; with one mention added
+  // to a leading comment of a file that loaded a moment earlier, it stops.
+  for (const project of projects) {
+    const text = fs.readFileSync(project.file, 'utf8');
+    const at = text.indexOf('<ProjectTypeGuids>');
+    if (at < 0) continue;                       // absence is reported by the loop above
+    const hidden = text.slice(0, at).indexOf('ProjectTypeGuids');
+    if (hidden >= 0) {
+      const lineOf = (n) => text.slice(0, n).split(/\r?\n/).length;
+      fail('project-flavor', project.file,
+        `the name ProjectTypeGuids appears at line ${lineOf(hidden)}, ahead of the ` +
+        `<ProjectTypeGuids> element at line ${lineOf(at)}. The IDE finds that element by ` +
+        'scanning this file as text, so the earlier mention is the one it reads: the ' +
+        'flavour then looks empty and the IDE refuses the project with "The application ' +
+        'for the project is not installed.", without a diagnostic code and without any ' +
+        'build noticing. Name the property only where it is declared -- in a comment, ' +
+        'say "the flavour property" instead.');
+      anyBad = true;
+    }
+  }
+
+  // The solution file, by the other rule. See the comment above: the .vbproj
+  // carries the flavour the IDE's project system reads, the .sln carries the
+  // factory the solution loader can actually resolve, and only the VB GUID is
+  // registered here. A .sln that names the flavour GUID is not wrong-looking
+  // copy -- it is an empty solution.
   const slnFile = path.join(ROOT, 'BrowserForWP.sln');
   if (fs.existsSync(slnFile)) {
     const byPath = new Map(projects.map((p) => [rel(p.file), p]));
@@ -552,18 +606,31 @@ function checkProjectFlavor() {
       const project = byPath.get(declaredPath);
       if (project === undefined) return;                  // reported by group 3
       const slnGuid = `{${m[1].toUpperCase()}}`;
-      if (slnGuid !== WP81_FLAVOR_GUID) {
+      if (slnGuid !== VB_PROJECT_TYPE_GUID) {
         fail('project-flavor', slnFile,
-          `the solution declares ${m[2]} with project type ${slnGuid}, while the project ` +
-          `carries ${project.projectTypeGuids}. Give both the Windows Phone 8.1 flavour ` +
-          `${WP81_FLAVOR_GUID}: a solution that says Windows Store for a Windows Phone project ` +
-          'invites the next reader to "fix" the project file the wrong way, which is how the ' +
-          'four reference warnings were introduced.', idx + 1);
+          `the solution declares ${m[2]} with project type ${slnGuid}. The .sln is loaded, not ` +
+          `compiled, and no build reads this field: only ${VB_PROJECT_TYPE_GUID} (VB) is ` +
+          `registered as a project factory in this VS2013 installation, while the flavour ` +
+          `${WP81_FLAVOR_GUID} this project correctly carries in its .vbproj is not. A solution ` +
+          'naming an unregistered factory opens with every project "(unavailable)" and a count ' +
+          `of zero. Use ${VB_PROJECT_TYPE_GUID} here and leave the flavour to the .vbproj, ` +
+          'which is where the IDE project system reads it.', idx + 1);
+        anyBad = true;
+      }
+      if (m[3].includes('\\')) {
+        fail('project-flavor', slnFile,
+          `the solution points at ${m[3]}, with a backslash between the directory and the ` +
+          'file. On Windows that is a separator; on any other host it is an ordinary ' +
+          'character in a file name, so a tool that is not Visual Studio cannot find the ' +
+          `project even with the right GUID. Write ${declaredPath}.`, idx + 1);
         anyBad = true;
       }
     });
   }
-  if (!anyBad) ok('every project, in the .vbproj and in the .sln, carries the Windows Phone 8.1 flavour GUID');
+  if (!anyBad) {
+    ok('every .vbproj carries the Windows Phone 8.1 flavour GUID');
+    ok('the .sln names a registered project factory and reads on any host');
+  }
 }
 
 // ── 4. Implements completeness ──────────────────────────────────────────────
