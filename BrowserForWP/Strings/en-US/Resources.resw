@@ -270,14 +270,23 @@
   <data name="EngineTrident" xml:space="preserve">
     <value>System WebView (Trident)</value>
   </data>
-  <data name="EngineNative" xml:space="preserve">
-    <value>BrowserForWP native</value>
+  <data name="EngineRemote" xml:space="preserve">
+    <value>Server (Chromium remotely)</value>
   </data>
   <data name="EngineReasonSetting" xml:space="preserve">
     <value>Chosen in Settings.</value>
   </data>
-  <data name="EngineReasonSettingNative" xml:space="preserve">
-    <value>Chosen in Settings: this engine draws markup and does not run JavaScript.</value>
+  <data name="EngineReasonSettingRemote" xml:space="preserve">
+    <value>Chosen in Settings: the server you configured draws these pages and can read everything you read.</value>
+  </data>
+  <data name="EngineReasonRemoteSecondary" xml:space="preserve">
+    <value>The primary server did not answer, so the secondary is being used.</value>
+  </data>
+  <data name="EngineReasonRemoteNotConfigured" xml:space="preserve">
+    <value>No server is configured. Add one in Settings, under Server.</value>
+  </data>
+  <data name="EngineReasonRemoteUnreachable" xml:space="preserve">
+    <value>Neither server answered.</value>
   </data>
   <data name="EngineReasonAutoNoMeasurement" xml:space="preserve">
     <value>Automatic: no page has been measured yet, so the system engine is used.</value>

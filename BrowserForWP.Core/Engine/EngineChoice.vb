@@ -21,7 +21,18 @@ Namespace Engine
     Public NotInheritable Class EngineChoice
 
         Public Const Trident As String = "trident"
-        Public Const Native As String = "native"
+
+        ''' <summary>
+        ''' Pages are drawn by a server running Chromium.
+        '''
+        ''' This keyword used to be "native", for the on-device renderer this
+        ''' repository built and then deleted. The VALUE changed with the meaning
+        ''' on purpose: an upgraded install that stored "native" must NOT silently
+        ''' start sending every page it reads through a server. Normalize turns the
+        ''' old keyword into Auto, so the worst a stale setting can do is nothing.
+        ''' </summary>
+        Public Const Remote As String = "remote"
+
         Public Const Auto As String = "auto"
 
         ''' <summary>
@@ -36,27 +47,27 @@ Namespace Engine
         End Sub
 
         ''' <summary>
-        ''' Anything unrecognised is Auto: never an error, and never Native by
+        ''' Anything unrecognised is Auto: never an error, and never Remote by
         ''' accident. A corrupt setting must not change which engine renders.
         ''' </summary>
         Public Shared Function Normalize(setting As String) As String
             If setting = Trident Then Return Trident
-            If setting = Native Then Return Native
+            If setting = Remote Then Return Remote
             Return Auto
         End Function
 
         ''' <summary>
         ''' The engine to use. An explicit setting always wins over the probe: a
-        ''' user who chose the native engine gets it even where Trident would have
+        ''' user who chose the remote engine gets it even where Trident would have
         ''' coped, and a user who chose Trident keeps it even where it will
         ''' struggle. Only Auto consults the measurement.
         ''' </summary>
         Public Shared Function Decide(setting As String, probeMeasured As Boolean, missingFeatureCount As Integer) As String
             Dim wanted As String = Normalize(setting)
-            If wanted = Native Then Return Native
+            If wanted = Remote Then Return Remote
             If wanted = Trident Then Return Trident
             If Not probeMeasured Then Return Trident
-            If missingFeatureCount >= AutomaticFallbackThreshold Then Return Native
+            If missingFeatureCount >= AutomaticFallbackThreshold Then Return Remote
             Return Trident
         End Function
 
@@ -67,7 +78,7 @@ Namespace Engine
         ''' </summary>
         Public Shared Function Explain(setting As String, probeMeasured As Boolean, missingFeatureCount As Integer) As String
             Dim wanted As String = Normalize(setting)
-            If wanted = Native Then Return "EngineReasonSettingNative"
+            If wanted = Remote Then Return "EngineReasonSettingRemote"
             If wanted = Trident Then Return "EngineReasonSetting"
             If Not probeMeasured Then Return "EngineReasonAutoNoMeasurement"
             If missingFeatureCount >= AutomaticFallbackThreshold Then Return "EngineReasonAutoTooManyMissingFeatures"

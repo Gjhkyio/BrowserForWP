@@ -561,32 +561,24 @@ check('lang primary subtag', catalogMatch(['it']) === 'it-IT');
 check('lang order authoritative', catalogMatch(['en-US', 'it-IT']) === 'en-US');
 check('en-US never removed', SupportedTags[0] === 'en-US');
 
-// ── The measurement seam (mirror of CoreLogicTests.vb's measurer checks) ──
-// Same two numbers as the VB. This file is what executes them; the VB project
-// compiles and is never run off-device.
-const ADVANCE_FACTOR = 0.5;
-const NORMAL_LINE_HEIGHT = 1.2;
-check('measurer advance', 4 * 16 * ADVANCE_FACTOR === 32);
-check('measurer normal line height', 16 * NORMAL_LINE_HEIGHT === 19.2);
-
 // ── The engine-choice rule (mirror of CoreLogicTests.vb) ──────────────────
 // tools/proto/engine-choice.mjs refuses this exhaustively; these are the rows
 // the compiled half must agree on too, and the third is the one that matters.
 function chooseEngine(setting, measured, missing) {
-  const wanted = setting === 'trident' || setting === 'native' ? setting : 'auto';
-  if (wanted === 'native') return 'native';
+  const wanted = setting === 'trident' || setting === 'remote' ? setting : 'auto';
+  if (wanted === 'remote') return 'remote';
   if (wanted === 'trident') return 'trident';
   if (!measured) return 'trident';
-  return missing >= 8 ? 'native' : 'trident';
+  return missing >= 8 ? 'remote' : 'trident';
 }
-check('engine choice: explicit native wins with no measurement',
-  chooseEngine('native', false, 0) === 'native');
+check('engine choice: explicit remote wins with no measurement',
+  chooseEngine('remote', false, 0) === 'remote');
 check('engine choice: explicit trident wins over a broken probe',
   chooseEngine('trident', true, 99) === 'trident');
 check('engine choice: auto never switches on an absent measurement',
   chooseEngine('auto', false, 99) === 'trident');
 check('engine choice: auto switches at the threshold',
-  chooseEngine('auto', true, 8) === 'native');
+  chooseEngine('auto', true, 8) === 'remote');
 
 // ── The three engine shapes behind EngineCapabilities.NeedsPolyfillLayer ──
 const needsPolyfillLayer = (scripting, modernJs) => scripting && !modernJs;

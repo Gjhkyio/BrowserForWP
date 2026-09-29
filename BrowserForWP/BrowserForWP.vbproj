@@ -95,9 +95,7 @@
     </Compile>
     <Compile Include="Diagnostics\TlsProbeRunner.vb" />
     <Compile Include="Diagnostics\NetDocumentFetcher.vb" />
-    <Compile Include="Engine\NativeEngine.vb" />
-    <Compile Include="Rendering\XamlTextMeasurer.vb" />
-    <Compile Include="Rendering\XamlBoxRenderer.vb" />
+    <Compile Include="Engine\RemoteEngine.vb" />
     <Compile Include="MainPage.xaml.vb">
       <DependentUpon>MainPage.xaml</DependentUpon>
     </Compile>

@@ -33,26 +33,26 @@ const SOURCE = 'BrowserForWP.Core/Engine/EngineChoice.vb';
 
 // ── The transliterated rule ────────────────────────────────────────────────
 const Trident = 'trident';
-const Native = 'native';
+const Remote = 'remote';
 const Auto = 'auto';
 const Threshold = 8;
 
 function Normalize(setting) {
-  if (setting === Trident || setting === Native) return setting;
+  if (setting === Trident || setting === Remote) return setting;
   return Auto;
 }
 
 function Decide(setting, probeMeasured, missingFeatureCount) {
   const choice = Normalize(setting);
-  if (choice === Native) return Native;
+  if (choice === Remote) return Remote;
   if (choice === Trident) return Trident;
   if (!probeMeasured) return Trident;
-  return missingFeatureCount >= Threshold ? Native : Trident;
+  return missingFeatureCount >= Threshold ? Remote : Trident;
 }
 
 function Explain(setting, probeMeasured, missingFeatureCount) {
   const choice = Normalize(setting);
-  if (choice === Native) return 'EngineReasonSettingNative';
+  if (choice === Remote) return 'EngineReasonSettingRemote';
   if (choice === Trident) return 'EngineReasonSetting';
   if (!probeMeasured) return 'EngineReasonAutoNoMeasurement';
   return missingFeatureCount >= Threshold
@@ -61,10 +61,10 @@ function Explain(setting, probeMeasured, missingFeatureCount) {
 }
 
 // ── The decision table ─────────────────────────────────────────────────────
-check('an explicit native choice wins over a healthy probe',
-  Decide(Native, true, 0) === Native);
-check('an explicit native choice is honoured with no measurement at all',
-  Decide(Native, false, 0) === Native);
+check('an explicit remote choice wins over a healthy probe',
+  Decide(Remote, true, 0) === Remote);
+check('an explicit remote choice is honoured with no measurement at all',
+  Decide(Remote, false, 0) === Remote);
 check('an explicit trident choice wins over a broken probe',
   Decide(Trident, true, 99) === Trident);
 check('an explicit trident choice is honoured with no measurement at all',
@@ -77,20 +77,32 @@ check('auto on a page the probe could run stays on Trident',
   Decide(Auto, true, 0) === Trident);
 check('auto one short of the threshold stays on Trident',
   Decide(Auto, true, 7) === Trident);
-check('auto at the threshold switches to the native engine',
-  Decide(Auto, true, 8) === Native);
+check('auto at the threshold switches to the remote engine',
+  Decide(Auto, true, 8) === Remote);
 check('auto past the threshold stays switched',
-  Decide(Auto, true, 99) === Native);
+  Decide(Auto, true, 99) === Remote);
+
+// The keyword this app used to store for the renderer it no longer has. An
+// upgrade that reads it must become indistinguishable from Auto -- and the
+// property that matters is the first line below, not the second: an unmeasured
+// page stays on Trident, so an upgrade cannot move anybody onto a server they
+// never chose. It CAN still reach the remote engine once a measurement says
+// Trident cannot cope, which is Auto's whole purpose.
+check('the keyword an older version stored normalises to Auto, not to an engine',
+  Normalize('native') === Auto);
+check('a stale keyword cannot move a page onto the remote engine without evidence',
+  Decide('native', false, 0) === Trident && Decide('native', false, 99) === Trident,
+  'with no measurement, nothing may switch');
 check('an empty setting is auto, not an error',
-  Decide('', true, 8) === Native && Decide('', true, 0) === Trident);
+  Decide('', true, 8) === Remote && Decide('', true, 0) === Trident);
 check('an unrecognised setting is auto, not an error',
-  Decide('ie', true, 8) === Native);
+  Decide('ie', true, 8) === Remote);
 check('the threshold is 8',
-  Decide(Auto, true, 7) === Trident && Decide(Auto, true, 8) === Native);
+  Decide(Auto, true, 7) === Trident && Decide(Auto, true, 8) === Remote);
 
 // ── The reasons are keys, one per reachable decision ───────────────────────
 const reasons = [
-  Explain(Native, true, 0),
+  Explain(Remote, true, 0),
   Explain(Trident, true, 0),
   Explain(Auto, true, 0),
   Explain(Auto, true, 9),
@@ -106,7 +118,7 @@ const source = readIfPresent(SOURCE);
 check(`${SOURCE} exists`, source.length > 0);
 check('it declares the three choices as constants',
   /Public Const Trident As String = "trident"/.test(source)
-  && /Public Const Native As String = "native"/.test(source)
+  && /Public Const Remote As String = "remote"/.test(source)
   && /Public Const Auto As String = "auto"/.test(source));
 check('it declares the threshold as a named constant, not a magic number',
   /AutomaticFallbackThreshold As Integer = 8/.test(source));

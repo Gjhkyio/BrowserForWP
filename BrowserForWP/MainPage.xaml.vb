@@ -28,7 +28,7 @@ Public NotInheritable Class MainPage
     ' its events.
     Private _engine As IBrowserEngine
     Private _tridentEngine As TridentEngine
-    Private _nativeEngine As BrowserForWP.Engine.NativeEngine
+    Private _remoteEngine As BrowserForWP.Engine.RemoteEngine
     Private ReadOnly _session As New BrowserSession()
     Private ReadOnly _appSettings As New AppSettings()
     Private ReadOnly _historyStore As New HistoryStore()
@@ -249,7 +249,7 @@ Public NotInheritable Class MainPage
             EnginePicker.Items.Clear()
             EnginePicker.Items.Add(Localizer.Get("EngineAuto"))
             EnginePicker.Items.Add(Localizer.Get("EngineTrident"))
-            EnginePicker.Items.Add(Localizer.Get("EngineNative"))
+            EnginePicker.Items.Add(Localizer.Get("EngineRemote"))
             EnginePicker.SelectedIndex = EngineIndexOf(EngineChoice.Normalize(_appSettings.EngineSetting))
         Finally
             _populatingEngine = False
@@ -257,13 +257,13 @@ Public NotInheritable Class MainPage
     End Sub
 
     Private Shared Function EngineIndexOf(normalizedSetting As String) As Integer
-        If normalizedSetting = EngineChoice.Native Then Return 2
+        If normalizedSetting = EngineChoice.Remote Then Return 2
         If normalizedSetting = EngineChoice.Trident Then Return 1
         Return 0
     End Function
 
     Private Shared Function EngineSettingFor(pickedIndex As Integer) As String
-        If pickedIndex = 2 Then Return EngineChoice.Native
+        If pickedIndex = 2 Then Return EngineChoice.Remote
         If pickedIndex = 1 Then Return EngineChoice.Trident
         Return EngineChoice.Auto
     End Function
@@ -809,18 +809,19 @@ Public NotInheritable Class MainPage
             ' A measurement that never ran must not move anything, which is the rule
             ' EngineChoice encodes and tools/proto/engine-choice.mjs refuses to let
             ' anyone forget. It also means this block does nothing at all when the
-            ' native engine is already the engine, since it has no scripting and
-            ' therefore returns above.
+            ' remote engine is already the engine: ScriptedEngine returns Nothing for
+            ' it -- the page's scripts run inside Chromium on the server, not here --
+            ' so the caller returned above.
             If Not compatReport.CouldRun Then Return
 
             ' The engine fallback and the reader fallback are alternatives, not a
-            ' sequence: when a measurement says Trident cannot cope, rendering the page
-            ' with this repository's own engine is a better answer than injecting a
-            ' reader, and doing both would fight over the same document. The reader
-            ' stays reachable from the Reading button.
+            ' sequence: when a measurement says Trident cannot cope, having a server
+            ' draw the page is a better answer than injecting a reader, and doing both
+            ' would fight over the same document. The reader stays reachable from the
+            ' Reading button.
             If _appSettings.EngineSetting = EngineChoice.Auto AndAlso
-               EngineChoice.Decide(EngineChoice.Auto, True, compatReport.MissingFeatures.Count) = EngineChoice.Native Then
-                UseEngine(EngineChoice.Native)
+               EngineChoice.Decide(EngineChoice.Auto, True, compatReport.MissingFeatures.Count) = EngineChoice.Remote Then
+                UseEngine(EngineChoice.Remote)
                 _engine.Navigate(_session.ActiveTab.Url)
                 Return
             End If
@@ -1037,13 +1038,12 @@ Public NotInheritable Class MainPage
     ''' so no other code path can leave the shell pointed at a stale engine.
     ''' </summary>
     Private Sub UseEngine(chosen As String)
-        If chosen = EngineChoice.Native Then
-            If _nativeEngine Is Nothing Then
-                _nativeEngine = New BrowserForWP.Engine.NativeEngine(
-                    New BrowserForWP.Diagnostics.NetDocumentFetcher(_pinTable), _appSettings)
-                AddHandler _nativeEngine.Navigated, AddressOf OnNativeNavigated
+        If chosen = EngineChoice.Remote Then
+            If _remoteEngine Is Nothing Then
+                _remoteEngine = New BrowserForWP.Engine.RemoteEngine(_appSettings, _pinTable)
+                AddHandler _remoteEngine.Navigated, AddressOf OnRemoteNavigated
             End If
-            _engine = _nativeEngine
+            _engine = _remoteEngine
         Else
             If _tridentEngine Is Nothing Then
                 _tridentEngine = New TridentEngine()
@@ -1062,12 +1062,11 @@ Public NotInheritable Class MainPage
     End Sub
 
     ''' <summary>
-    ''' A render by the native engine ended. It reports the same states the WebView's
-    ''' completion handler reports, through the same helpers, so a page drawn by this
-    ''' repository's own engine leaves the shell exactly where the rest of the app
-    ''' expects it to be.
+    ''' A render by the remote engine ended. It reports the same states the WebView's
+    ''' completion handler reports, through the same helpers, so a page drawn by a
+    ''' server leaves the shell exactly where the rest of the app expects it to be.
     ''' </summary>
-    Private Sub OnNativeNavigated(sender As Object, e As BrowserForWP.Engine.NativeNavigationResult)
+    Private Sub OnRemoteNavigated(sender As Object, e As BrowserForWP.Engine.RemoteNavigationResult)
         If e Is Nothing Then Return
 
         LoadProgress.Value = If(e.IsSuccess, 100, 0)
@@ -1078,22 +1077,16 @@ Public NotInheritable Class MainPage
             ' shape the WebView path already uses for WebErrorStatus. It is a wart
             ' this repository records rather than one introduced here.
             StatusText.Text = String.Empty
-            Dim failureReason As String
-            Select Case e.ErrorKind
-                Case "NotHtml"
-                    failureReason = Localizer.Get("ParseNoDocument")
-                Case "Layout"
-                    failureReason = Localizer.Get("ErrorPageFailed")
-                Case Else
-                    failureReason = Localizer.Get("ErrorNavigationFailed")
-            End Select
-            ErrorText.Text = failureReason & " (" & e.ErrorKind & ")"
+            ErrorText.Text = Localizer.Get(e.StatusKey)
+            If Not String.IsNullOrEmpty(e.Detail) Then
+                ErrorText.Text = ErrorText.Text & " (" & e.Detail & ")"
+            End If
             ErrorText.Visibility = Visibility.Visible
             RefreshTabsList()
             Return
         End If
 
-        StatusText.Text = Localizer.Get("LoadComplete") & "  " & _nativeEngine.LastSize
+        StatusText.Text = Localizer.Get("LoadComplete") & "  " & Localizer.Get(e.StatusKey)
         _session.ActiveTab.ReplaceCurrent(e.Url)
         AddressBox.Text = _session.ActiveTab.Url
         If Not _session.PrivateMode Then

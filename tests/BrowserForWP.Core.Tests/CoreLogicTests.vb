@@ -7,7 +7,6 @@
 
 Imports BrowserForWP.Core.Browser
 Imports BrowserForWP.Core.Engine
-Imports BrowserForWP.Core.Engine.Native
 Imports BrowserForWP.Core.Storage
 Imports BrowserForWP.Localization
 Imports BrowserForWP.Net.Tls13
@@ -60,28 +59,17 @@ Namespace CoreTests
             Check(UserAgents.EffectiveUserAgent(False) = UserAgents.MobileDefault, "UA helper mobile")
             ran += 1
 
-            ' The measurer's arithmetic is what makes layout numbers reproducible, so
-            ' it is asserted here (compiled on the guest) AND in
-            ' tools/proto/textmeasure.mjs (executed on any machine). Keep the two in
-            ' step: a drift between them makes Node right and the device wrong.
-            Dim measureStyle As New ComputedStyle()
-            measureStyle.FontSizePx = 16
-            Dim fixedMeasurer As New FixedAdvanceTextMeasurer()
-            Check(fixedMeasurer.MeasureWidth("abcd", measureStyle) = 32, "measurer advance")
-            Check(fixedMeasurer.LineHeight(measureStyle) = 19.2, "measurer normal line height")
-            ran += 1
-
             ' The engine-choice rule. Refused exhaustively off-device by
             ' tools/proto/engine-choice.mjs; these four are the rows that also have
             ' to hold in the compiled half, and the third is the one that matters:
             ' an absent measurement is never grounds for switching engines.
-            Check(EngineChoice.Decide(EngineChoice.Native, False, 0) = EngineChoice.Native,
-                  "engine choice: explicit native wins with no measurement")
+            Check(EngineChoice.Decide(EngineChoice.Remote, False, 0) = EngineChoice.Remote,
+                  "engine choice: explicit remote wins with no measurement")
             Check(EngineChoice.Decide(EngineChoice.Trident, True, 99) = EngineChoice.Trident,
                   "engine choice: explicit trident wins over a broken probe")
             Check(EngineChoice.Decide(EngineChoice.Auto, False, 99) = EngineChoice.Trident,
                   "engine choice: auto never switches on an absent measurement")
-            Check(EngineChoice.Decide(EngineChoice.Auto, True, EngineChoice.AutomaticFallbackThreshold) = EngineChoice.Native,
+            Check(EngineChoice.Decide(EngineChoice.Auto, True, EngineChoice.AutomaticFallbackThreshold) = EngineChoice.Remote,
                   "engine choice: auto switches at the threshold")
             ran += 1
 
