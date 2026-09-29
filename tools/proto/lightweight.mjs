@@ -22,13 +22,13 @@ check('night/block/restore/session props',
   settings.includes('NightMode') && settings.includes('BlockTrackers') &&
   settings.includes('RestoreSession') && settings.includes('LastSessionTabs'));
 check('single search default, no migration',
-  !settings.includes('SearchTemplate') && !settings.includes('MigrateSearchTemplate'));
+  !settings.includes('Property SearchTemplate') && !settings.includes('MigrateSearchTemplate'));
 check('session tab cap', /MaxSessionTabs As Integer = 6/.test(settings));
 
 const mainPage = read('BrowserForWP/MainPage.xaml.vb');
 check('no google search template', !mainPage.includes('google.com/search'));
 check('no bing search template', !mainPage.includes('bing.com/search'));
-check('duckduckgo lite offered', mainPage.includes('lite.duckduckgo.com'));
+check('duckduckgo lite is the search default', settings.includes('lite.duckduckgo.com'));
 check('tracker block enforced', mainPage.includes('ShouldBlock'));
 check('night mode applied', mainPage.includes('SetNightModeAsync'));
 check('private mode skips history', /PrivateMode[\s\S]{0,300}history/i.test(mainPage) || mainPage.includes('PrivateMode'));

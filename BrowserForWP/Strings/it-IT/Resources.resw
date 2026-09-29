@@ -153,17 +153,8 @@
   <data name="ProbeNotRun" xml:space="preserve">
     <value>Nessuna risposta dalla pagina: è ancora in caricamento, oppure questo motore non esegue script.</value>
   </data>
-  <data name="ParseThisPage" xml:space="preserve">
-    <value>Analizza la pagina corrente</value>
-  </data>
   <data name="ParseNoDocument" xml:space="preserve">
     <value>Niente da analizzare: la scheda non ha indirizzo, oppure la risposta non è HTML.</value>
-  </data>
-  <data name="ParseFailed" xml:space="preserve">
-    <value>Recupero non riuscito.</value>
-  </data>
-  <data name="ParseBoxCount" xml:space="preserve">
-    <value>box: </value>
   </data>
   <data name="IeModeCheck" xml:space="preserve">
     <value>Controlla modalità IE</value>
@@ -254,12 +245,9 @@
     <value>Pin non corrispondente al prossimo probe.</value>
   </data>
 
-  <!-- Homepage e ricerca -->
+  <!-- Homepage -->
   <data name="HomepageLabel" xml:space="preserve">
     <value>Homepage</value>
-  </data>
-  <data name="SearchEngineLabel" xml:space="preserve">
-    <value>Motore di ricerca</value>
   </data>
   <data name="EngineLabel" xml:space="preserve">
     <value>Motore di rendering</value>
@@ -335,7 +323,54 @@
   <data name="LiteRedirects" xml:space="preserve">
     <value>Preferisci versioni leggere</value>
   </data>
-  <!-- Server remoto: dove sono disegnate le pagine, e cosa costa -->
+
+  <!-- Pagine offline -->
+  <data name="SavePage" xml:space="preserve">
+    <value>Salva pagina</value>
+  </data>
+  <data name="SavedPages" xml:space="preserve">
+    <value>Pagine salvate</value>
+  </data>
+  <data name="SavedDelete" xml:space="preserve">
+    <value>Elimina</value>
+  </data>
+
+  <!-- Visualizzazione per sito -->
+  <data name="TextSize" xml:space="preserve">
+    <value>Dimensione testo</value>
+  </data>
+  <data name="Images" xml:space="preserve">
+    <value>Immagini</value>
+  </data>
+
+  <!-- Accesso rapido -->
+  <data name="SpeedDial" xml:space="preserve">
+    <value>Accesso rapido</value>
+  </data>
+  <data name="SpeedDialAdd" xml:space="preserve">
+    <value>Aggiungi pagina corrente</value>
+  </data>
+  <data name="SpeedDialRemove" xml:space="preserve">
+    <value>Rimuovi</value>
+  </data>
+
+  <!-- Backup e ripristino -->
+  <data name="Backup" xml:space="preserve">
+    <value>Backup</value>
+  </data>
+  <data name="Restore" xml:space="preserve">
+    <value>Ripristina</value>
+  </data>
+  <data name="BackupDone" xml:space="preserve">
+    <value>Completato</value>
+  </data>
+
+  <!-- Recupero errori -->
+  <data name="Retry" xml:space="preserve">
+    <value>Riprova</value>
+  </data>
+
+  <!-- Server remoto: dove sono disegnate le pagine, e quanto costa -->
   <data name="RemoteNotice" xml:space="preserve">
     <value>Le pagine sono disegnate dal server, quindi chi lo gestisce può leggere tutto quello che leggi tu, password comprese. Lascia disattivato se non gestisci tu il server o non ti fidi di chi lo fa.</value>
   </data>
@@ -354,7 +389,8 @@
   <data name="RemoteUseServer" xml:space="preserve">
     <value>Disegna le pagine sul server</value>
   </data>
-  <!-- La barra dei tasti: quelli che una tastiera del telefono non può mandare -->
+
+  <!-- La barra dei tasti: i tasti che una tastiera telefonica non può inviare (vedi MainPage.xaml) -->
   <data name="RemoteKeys" xml:space="preserve">
     <value>Tasti</value>
   </data>

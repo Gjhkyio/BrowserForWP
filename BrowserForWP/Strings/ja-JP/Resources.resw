@@ -153,17 +153,8 @@
   <data name="ProbeNotRun" xml:space="preserve">
     <value>ページから応答がありません: 読み込み中か、このエンジンではスクリプトを実行できません。</value>
   </data>
-  <data name="ParseThisPage" xml:space="preserve">
-    <value>現在のページを解析</value>
-  </data>
   <data name="ParseNoDocument" xml:space="preserve">
     <value>解析対象がありません: タブにアドレスがないか、応答がHTMLではありません。</value>
-  </data>
-  <data name="ParseFailed" xml:space="preserve">
-    <value>取得に失敗しました。</value>
-  </data>
-  <data name="ParseBoxCount" xml:space="preserve">
-    <value>ボックス: </value>
   </data>
   <data name="IeModeCheck" xml:space="preserve">
     <value>IEモードを確認</value>
@@ -254,12 +245,9 @@
     <value>次回のプローブでピンが一致しません。</value>
   </data>
 
-  <!-- Homepage and search -->
+  <!-- Homepage -->
   <data name="HomepageLabel" xml:space="preserve">
     <value>ホームページ</value>
-  </data>
-  <data name="SearchEngineLabel" xml:space="preserve">
-    <value>検索エンジン</value>
   </data>
   <data name="EngineLabel" xml:space="preserve">
     <value>レンダリングエンジン</value>
@@ -270,14 +258,23 @@
   <data name="EngineTrident" xml:space="preserve">
     <value>System WebView (Trident)</value>
   </data>
-  <data name="EngineNative" xml:space="preserve">
-    <value>BrowserForWP native</value>
+  <data name="EngineRemote" xml:space="preserve">
+    <value>サーバー (リモートのChromium)</value>
   </data>
   <data name="EngineReasonSetting" xml:space="preserve">
     <value>設定で選択。</value>
   </data>
-  <data name="EngineReasonSettingNative" xml:space="preserve">
-    <value>設定で選択: このエンジンはマークアップを描画し、JavaScriptを実行しません。</value>
+  <data name="EngineReasonSettingRemote" xml:space="preserve">
+    <value>設定で選択: 設定したサーバーがページを描画し、読む内容をすべて読むことができます。</value>
+  </data>
+  <data name="EngineReasonRemoteSecondary" xml:space="preserve">
+    <value>プライマリサーバーが応答しなかったため、セカンダリを使用しています。</value>
+  </data>
+  <data name="EngineReasonRemoteNotConfigured" xml:space="preserve">
+    <value>サーバーが設定されていません。設定のサーバーで追加してください。</value>
+  </data>
+  <data name="EngineReasonRemoteUnreachable" xml:space="preserve">
+    <value>どちらのサーバーも応答しませんでした。</value>
   </data>
   <data name="EngineReasonAutoNoMeasurement" xml:space="preserve">
     <value>自動: まだページが測定されていないため、システムエンジンを使用します。</value>
@@ -325,5 +322,103 @@
   </data>
   <data name="LiteRedirects" xml:space="preserve">
     <value>軽量版のサイトを優先</value>
+  </data>
+
+  <!-- Offline pages -->
+  <data name="SavePage" xml:space="preserve">
+    <value>ページを保存</value>
+  </data>
+  <data name="SavedPages" xml:space="preserve">
+    <value>保存したページ</value>
+  </data>
+  <data name="SavedDelete" xml:space="preserve">
+    <value>削除</value>
+  </data>
+
+  <!-- Per-site display -->
+  <data name="TextSize" xml:space="preserve">
+    <value>文字サイズ</value>
+  </data>
+  <data name="Images" xml:space="preserve">
+    <value>画像</value>
+  </data>
+
+  <!-- Speed dial -->
+  <data name="SpeedDial" xml:space="preserve">
+    <value>スピードダイヤル</value>
+  </data>
+  <data name="SpeedDialAdd" xml:space="preserve">
+    <value>現在のページを追加</value>
+  </data>
+  <data name="SpeedDialRemove" xml:space="preserve">
+    <value>削除</value>
+  </data>
+
+  <!-- Backup and restore -->
+  <data name="Backup" xml:space="preserve">
+    <value>バックアップ</value>
+  </data>
+  <data name="Restore" xml:space="preserve">
+    <value>復元</value>
+  </data>
+  <data name="BackupDone" xml:space="preserve">
+    <value>完了</value>
+  </data>
+
+  <!-- Error recovery -->
+  <data name="Retry" xml:space="preserve">
+    <value>再試行</value>
+  </data>
+
+  <!-- Remote server: where the pages are drawn, and what that costs -->
+  <data name="RemoteNotice" xml:space="preserve">
+    <value>ページはサーバーが描画するため、運営者はパスワードを含め読む内容をすべて読むことができます。サーバーを自分で運営している場合や運営者を信頼できる場合を除き、オフのままにしてください。</value>
+  </data>
+  <data name="RemoteServerLabel" xml:space="preserve">
+    <value>サーバーアドレス</value>
+  </data>
+  <data name="RemoteTokenLabel" xml:space="preserve">
+    <value>デバイストークン</value>
+  </data>
+  <data name="RemoteBackupLabel" xml:space="preserve">
+    <value>バックアップサーバーのアドレス (任意)</value>
+  </data>
+  <data name="RemoteBackupTokenLabel" xml:space="preserve">
+    <value>バックアップデバイスのトークン (任意)</value>
+  </data>
+  <data name="RemoteUseServer" xml:space="preserve">
+    <value>ページをサーバーで描画</value>
+  </data>
+
+  <!-- The keys bar: the keys a phone keyboard cannot send (see MainPage.xaml) -->
+  <data name="RemoteKeys" xml:space="preserve">
+    <value>キー</value>
+  </data>
+  <data name="KeyTab" xml:space="preserve">
+    <value>Tab</value>
+  </data>
+  <data name="KeyEnter" xml:space="preserve">
+    <value>Enter</value>
+  </data>
+  <data name="KeyEscape" xml:space="preserve">
+    <value>Esc</value>
+  </data>
+  <data name="KeyBackspace" xml:space="preserve">
+    <value>Backspace</value>
+  </data>
+  <data name="KeyLeft" xml:space="preserve">
+    <value>&#x2190;</value>
+  </data>
+  <data name="KeyUp" xml:space="preserve">
+    <value>&#x2191;</value>
+  </data>
+  <data name="KeyDown" xml:space="preserve">
+    <value>&#x2193;</value>
+  </data>
+  <data name="KeyRight" xml:space="preserve">
+    <value>&#x2192;</value>
+  </data>
+  <data name="KeyBarClose" xml:space="preserve">
+    <value>閉じる</value>
   </data>
 </root>

@@ -153,17 +153,8 @@
   <data name="ProbeNotRun" xml:space="preserve">
     <value>Sin respuesta de la página: aún se está cargando o este motor no puede ejecutar scripts.</value>
   </data>
-  <data name="ParseThisPage" xml:space="preserve">
-    <value>Analizar página actual</value>
-  </data>
   <data name="ParseNoDocument" xml:space="preserve">
     <value>Nada que analizar: la pestaña no tiene dirección o la respuesta no era HTML.</value>
-  </data>
-  <data name="ParseFailed" xml:space="preserve">
-    <value>Error al obtener.</value>
-  </data>
-  <data name="ParseBoxCount" xml:space="preserve">
-    <value>cajas: </value>
   </data>
   <data name="IeModeCheck" xml:space="preserve">
     <value>Comprobar modo IE</value>
@@ -254,12 +245,9 @@
     <value>La fijación no coincide en la próxima prueba.</value>
   </data>
 
-  <!-- Homepage and search -->
+  <!-- Homepage -->
   <data name="HomepageLabel" xml:space="preserve">
     <value>Página inicial</value>
-  </data>
-  <data name="SearchEngineLabel" xml:space="preserve">
-    <value>Buscador</value>
   </data>
   <data name="EngineLabel" xml:space="preserve">
     <value>Motor de renderizado</value>
@@ -270,14 +258,23 @@
   <data name="EngineTrident" xml:space="preserve">
     <value>System WebView (Trident)</value>
   </data>
-  <data name="EngineNative" xml:space="preserve">
-    <value>BrowserForWP native</value>
+  <data name="EngineRemote" xml:space="preserve">
+    <value>Servidor (Chromium remoto)</value>
   </data>
   <data name="EngineReasonSetting" xml:space="preserve">
     <value>Elegido en Ajustes.</value>
   </data>
-  <data name="EngineReasonSettingNative" xml:space="preserve">
-    <value>Elegido en Ajustes: este motor dibuja marcado y no ejecuta JavaScript.</value>
+  <data name="EngineReasonSettingRemote" xml:space="preserve">
+    <value>Elegido en Ajustes: el servidor configurado dibuja estas páginas y puede leer todo lo que lees.</value>
+  </data>
+  <data name="EngineReasonRemoteSecondary" xml:space="preserve">
+    <value>El servidor principal no respondió, se está usando el secundario.</value>
+  </data>
+  <data name="EngineReasonRemoteNotConfigured" xml:space="preserve">
+    <value>Ningún servidor configurado. Añade uno en Ajustes, en Servidor.</value>
+  </data>
+  <data name="EngineReasonRemoteUnreachable" xml:space="preserve">
+    <value>Ningún servidor respondió.</value>
   </data>
   <data name="EngineReasonAutoNoMeasurement" xml:space="preserve">
     <value>Automático: aún no se ha medido ninguna página, se usa el motor del sistema.</value>
@@ -325,5 +322,103 @@
   </data>
   <data name="LiteRedirects" xml:space="preserve">
     <value>Preferir versiones ligeras</value>
+  </data>
+
+  <!-- Offline pages -->
+  <data name="SavePage" xml:space="preserve">
+    <value>Guardar página</value>
+  </data>
+  <data name="SavedPages" xml:space="preserve">
+    <value>Páginas guardadas</value>
+  </data>
+  <data name="SavedDelete" xml:space="preserve">
+    <value>Eliminar</value>
+  </data>
+
+  <!-- Per-site display -->
+  <data name="TextSize" xml:space="preserve">
+    <value>Tamaño del texto</value>
+  </data>
+  <data name="Images" xml:space="preserve">
+    <value>Imágenes</value>
+  </data>
+
+  <!-- Speed dial -->
+  <data name="SpeedDial" xml:space="preserve">
+    <value>Acceso rápido</value>
+  </data>
+  <data name="SpeedDialAdd" xml:space="preserve">
+    <value>Añadir página actual</value>
+  </data>
+  <data name="SpeedDialRemove" xml:space="preserve">
+    <value>Quitar</value>
+  </data>
+
+  <!-- Backup and restore -->
+  <data name="Backup" xml:space="preserve">
+    <value>Hacer copia</value>
+  </data>
+  <data name="Restore" xml:space="preserve">
+    <value>Restaurar</value>
+  </data>
+  <data name="BackupDone" xml:space="preserve">
+    <value>Listo</value>
+  </data>
+
+  <!-- Error recovery -->
+  <data name="Retry" xml:space="preserve">
+    <value>Reintentar</value>
+  </data>
+
+  <!-- Remote server: where the pages are drawn, and what that costs -->
+  <data name="RemoteNotice" xml:space="preserve">
+    <value>Las páginas las dibuja el servidor, así que quien lo opera puede leer todo lo que lees, incluidas las contraseñas. Déjalo desactivado a menos que operes el servidor o confíes en quien lo hace.</value>
+  </data>
+  <data name="RemoteServerLabel" xml:space="preserve">
+    <value>Dirección del servidor</value>
+  </data>
+  <data name="RemoteTokenLabel" xml:space="preserve">
+    <value>Token del dispositivo</value>
+  </data>
+  <data name="RemoteBackupLabel" xml:space="preserve">
+    <value>Dirección del servidor de reserva (opcional)</value>
+  </data>
+  <data name="RemoteBackupTokenLabel" xml:space="preserve">
+    <value>Token del dispositivo de reserva (opcional)</value>
+  </data>
+  <data name="RemoteUseServer" xml:space="preserve">
+    <value>Dibujar páginas en el servidor</value>
+  </data>
+
+  <!-- The keys bar: the keys a phone keyboard cannot send (see MainPage.xaml) -->
+  <data name="RemoteKeys" xml:space="preserve">
+    <value>Teclas</value>
+  </data>
+  <data name="KeyTab" xml:space="preserve">
+    <value>Tab</value>
+  </data>
+  <data name="KeyEnter" xml:space="preserve">
+    <value>Intro</value>
+  </data>
+  <data name="KeyEscape" xml:space="preserve">
+    <value>Esc</value>
+  </data>
+  <data name="KeyBackspace" xml:space="preserve">
+    <value>Retroceso</value>
+  </data>
+  <data name="KeyLeft" xml:space="preserve">
+    <value>&#x2190;</value>
+  </data>
+  <data name="KeyUp" xml:space="preserve">
+    <value>&#x2191;</value>
+  </data>
+  <data name="KeyDown" xml:space="preserve">
+    <value>&#x2193;</value>
+  </data>
+  <data name="KeyRight" xml:space="preserve">
+    <value>&#x2192;</value>
+  </data>
+  <data name="KeyBarClose" xml:space="preserve">
+    <value>Cerrar</value>
   </data>
 </root>
