@@ -22,7 +22,7 @@ Namespace Storage
     Public NotInheritable Class FavoritesStore
 
         ''' <summary>Maximum bookmarks kept (speed + memory).</summary>
-        Public Const MaxEntries As Integer = 100
+        Public Const MaxEntries As Integer = 50
 
         Private ReadOnly _items As New Dictionary(Of String, String)()
 
