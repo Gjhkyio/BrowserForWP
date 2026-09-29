@@ -589,6 +589,45 @@ check('capabilities: a modern engine does not',
 check('capabilities: an engine with no script host does not',
   needsPolyfillLayer(false, false) === false);
 
+// ── The remote render servers: a primary, a secondary, and nothing else ────
+// Mirror of RemoteServers.vb. The port case is the one that cost a round: a
+// "has a scheme" test that only looked for a colon read `render.example.com:8443`
+// as scheme "render.example.com", refused it, and made a typed server disappear
+// from the settings screen with no message at all. A colon is not a scheme.
+const normalizeServer = (raw) => {
+  const text = String(raw ?? '').trim();
+  if (!text) return '';
+  const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(text) ? text : `https://${text}`;
+  let parsed;
+  try { parsed = new URL(withScheme); } catch { return ''; }
+  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return '';
+  return parsed.origin + (parsed.pathname === '/' ? '' : parsed.pathname.replace(/\/$/, ''));
+};
+const orderServers = (primary, secondary) => {
+  const first = normalizeServer(primary);
+  const second = normalizeServer(secondary);
+  const out = [];
+  if (first) out.push(first);
+  if (second && second !== first) out.push(second);
+  return out;
+};
+const tokenFor = (url, secondaryUrl, primaryToken, secondaryToken) =>
+  normalizeServer(url) === normalizeServer(secondaryUrl) && secondaryToken
+    ? secondaryToken
+    : primaryToken;
+
+const orderedServers = orderServers('render.example.com', 'https://backup.example.com/');
+check('servers: two configured', orderedServers.length === 2);
+check('servers: the primary is normalized first',
+  orderedServers[0] === 'https://render.example.com');
+check('servers: the secondary is normalized',
+  orderedServers[1] === 'https://backup.example.com');
+check('servers: a non-web scheme is refused', normalizeServer('file:///tmp') === '');
+check('servers: a bare host and port is a host and port',
+  normalizeServer('render.example.com:8443') === 'https://render.example.com:8443');
+check('servers: the secondary falls back to the primary token',
+  tokenFor('https://backup.example.com', 'https://backup.example.com', 'primary-token', '') === 'primary-token');
+
 // ── Summary ───────────────────────────────────────────────────────────────
 if (failures > 0) {
   console.log(`\n${failures} core-logic failure(s) out of ${checks}.`);

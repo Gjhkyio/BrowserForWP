@@ -230,14 +230,13 @@ verified if you skipped its command.
 | Lite defaults / caps / resources | `node tools/proto/lightweight.mjs` | `0 failure(s)` |
 | Shim delivery / redirect rules | `node tools/proto/modern-sites.mjs` | `0 failure(s)` |
 | Picker/tab re-entrancy, sln registration | `node tools/proto/shell-guards.mjs` | `0 failure(s)` |
-| Text measurement (`ITextMeasurer`, either implementation) | `node tools/proto/textmeasure.mjs` | `10/10 checks passed` |
-| `BlockLayout.vb` / `InlineLayout.vb` / `LayoutBox.vb`, or anything that positions a box | `node tools/proto/boxlayout.mjs` | `19/19 checks passed` |
+| `RemoteServers.vb`, the settings fields it reads, or anything that chooses WHERE to render | `node tools/proto/remote-servers.mjs` | `19/19 checks passed`. The old `textmeasure.mjs` / `boxlayout.mjs` rows were deleted with the on-device renderer |
 | `EngineChoice.vb`, or anything that selects an engine or falls back automatically | `node tools/proto/engine-choice.mjs` | `21/21 checks passed` |
 | `CompatibilityProbe.vb` / any probe verdict | `node tools/proto/probe-verdict.mjs` | `9/9 checks passed` |
 | Any claim about re-configuring Trident | `node tools/proto/ie-adapt.mjs` | `9/9 checks passed` |
 | Any claim about leaving the AppContainer, or about getting JIT memory | `node tools/proto/sandbox-escape.mjs` | `15/15 checks passed` |
 | `BrowserForWP.Polyfill/compat.js` | `node tools/check-polyfill.mjs` | `is valid ES5` |
-| Any `.vb`, `.vbproj`, `.xaml` or `.resw` | `node tools/check-vb.mjs` | `0 finding(s)`, exit code 0 (72 groups, 17 categories) |
+| Any `.vb`, `.vbproj`, `.xaml` or `.resw` | `node tools/check-vb.mjs` | `0 finding(s)`, exit code 0 (16 groups over 17 categories) |
 | A declaration that names a VB keyword (`Dim next`, `Function Error`) | `node tools/check-vb.mjs` | `0 finding(s)`; group 17. Its word list is measured by `tools/keyword-probe.cmd`, not quoted from the language reference |
 | Any `'''` doc comment, and any `Imports` of a BrowserForWP namespace | `node tools/check-vb.mjs` | `0 finding(s)`; group 13 balances doc-comment tags and refuses a plain `'` line stranded inside a `'''` block, and group 2 composes NESTED `Namespace` blocks. Both cost real warnings in Round 9 |
 | Adding or changing a word in group 17 | `tools\keyword-probe.cmd` in the guest | all three batches report `sentinel refused` and `controls clean`; the refused line numbers ARE the measurement. A batch whose sentinel is not refused is void, not clean |
@@ -312,14 +311,14 @@ tools/proto/*.mjs             ← runnable prototypes and logic mirrors
                                  trackerblock, lightweight, modern-sites,
                                  shell-guards, ie-adapt, sandbox-escape,
                                  probe-verdict, fetch-rules, htmlparse,
-                                 csscascade, boxtree, engine-choice)
+                                 csscascade, boxtree, engine-choice,
+                                 remote-servers, remote-protocol)
 tools/make_logo.py            ← regenerates every image asset
-tools/proto/textmeasure.mjs   ← the measurer's arithmetic (referee)
-tools/proto/boxlayout.mjs     ← block/inline layout numbers (referee)
+tools/proto/remote-servers.mjs← primary/secondary order, url normalisation (referee)
 tools/proto/engine-choice.mjs ← which engine renders, and when it may fall back
 BrowserForWP/Engine/NativeEngine.vb ← this repository's own engine, behind the
                                  same IBrowserEngine seam as the WebView
-tools/check-vb.mjs            ← 17 categories / 72 check groups of static
+tools/check-vb.mjs            ← 17 categories / 16 check groups of static
                                  VB/XAML/project/resw/theme-key/flavour/
                                  import/name-legality/doc-comment checks
 tools/keyword-probe/          ← one `Dim <word> As Integer` per candidate,

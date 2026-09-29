@@ -7,6 +7,7 @@
 
 Imports BrowserForWP.Core.Browser
 Imports BrowserForWP.Core.Engine
+Imports BrowserForWP.Core.Remote
 Imports BrowserForWP.Core.Storage
 Imports BrowserForWP.Localization
 Imports BrowserForWP.Net.Tls13
@@ -130,6 +131,26 @@ Namespace CoreTests
 
             Check(LanguageCatalog.Match(New String() {"it-IT"}) = "it-IT", "lang it")
             Check(LanguageCatalog.Match(New String() {"xx"}) = "en-US", "lang fallback")
+            ran += 1
+
+            Dim serverSettings As New RemoteServerSettings()
+            serverSettings.PrimaryUrl = "render.example.com"
+            serverSettings.SecondaryUrl = "https://backup.example.com/"
+            serverSettings.PrimaryToken = "primary-token"
+            Dim serverOrder As List(Of String) = RemoteServers.Order(serverSettings)
+            Check(serverOrder.Count = 2, "server order: two configured")
+            Check(serverOrder(0) = "https://render.example.com", "server order: primary normalized first")
+            Check(serverOrder(1) = "https://backup.example.com", "server order: secondary normalized")
+            Check(RemoteServers.Normalize("file:///tmp") = "", "server url: non-web scheme refused")
+            ' A colon is not a scheme. Reading the host of "render.example.com:8443" as
+            ' a scheme refused it, so a server a person had just typed VANISHED from
+            ' the settings screen with no message -- worse than refusing the field,
+            ' because there is nothing to correct.
+            Check(RemoteServers.Normalize("render.example.com:8443") = "https://render.example.com:8443",
+                  "server url: a bare host and port is a host and port")
+            ' One field instead of two: the same device, registered on both servers.
+            Check(RemoteServers.TokenFor(serverSettings, "https://backup.example.com") = "primary-token",
+                  "server token: the secondary falls back to the primary's")
             ran += 1
 
             Return ran

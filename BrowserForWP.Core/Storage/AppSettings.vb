@@ -38,6 +38,11 @@ Namespace Storage
             LiteRedirects = True
             EngineSetting = Engine.EngineChoice.Auto
             LastSessionTabs = String.Empty
+            RemotePrimaryUrl = String.Empty
+            RemotePrimaryToken = String.Empty
+            RemoteSecondaryUrl = String.Empty
+            RemoteSecondaryToken = String.Empty
+            RemoteEnabled = False
         End Sub
 
         Public Property Homepage As String
@@ -65,6 +70,29 @@ Namespace Storage
         Public Property EngineSetting As String
 
         Public Property LastSessionTabs As String
+
+        ''' <summary>
+        ''' Where pages are rendered when the remote engine is chosen. EMPTY by
+        ''' default: this build bakes in no server at all, so nothing a user reads
+        ''' leaves their device until they configure one and turn it on.
+        ''' </summary>
+        Public Property RemotePrimaryUrl As String
+
+        ''' <summary>The secret the server issued for THIS device, pasted once.</summary>
+        Public Property RemotePrimaryToken As String
+
+        ''' <summary>
+        ''' The fallback, tried only when the primary cannot be reached. Somebody
+        ''' who points this at their own server is using the app without the
+        ''' primary's author being able to go away.
+        ''' </summary>
+        Public Property RemoteSecondaryUrl As String
+
+        ''' <summary>Falls back to the primary's token when empty.</summary>
+        Public Property RemoteSecondaryToken As String
+
+        ''' <summary>Off until a person turns it on. See ARCHITECTURE.md Law 5.</summary>
+        Public Property RemoteEnabled As Boolean
 
         ''' <summary>Build a search URL from raw query text.</summary>
         Public Function SearchUrlFor(queryText As String) As String
@@ -139,6 +167,11 @@ Namespace Storage
             hostMap("liteRedirects") = If(LiteRedirects, "1", "0")
             hostMap("engineSetting") = If(String.IsNullOrEmpty(EngineSetting), Engine.EngineChoice.Auto, EngineSetting)
             hostMap("lastSessionTabs") = If(LastSessionTabs, String.Empty)
+            hostMap("remotePrimaryUrl") = If(RemotePrimaryUrl, String.Empty)
+            hostMap("remotePrimaryToken") = If(RemotePrimaryToken, String.Empty)
+            hostMap("remoteSecondaryUrl") = If(RemoteSecondaryUrl, String.Empty)
+            hostMap("remoteSecondaryToken") = If(RemoteSecondaryToken, String.Empty)
+            hostMap("remoteEnabled") = If(RemoteEnabled, "1", "0")
             Return hostMap
         End Function
 
@@ -203,6 +236,25 @@ Namespace Storage
             End If
             If sourceMap.TryGetValue("lastSessionTabs", foundValue) Then
                 LastSessionTabs = If(foundValue, String.Empty)
+            End If
+            ' The urls go through Normalize for the same reason EngineSetting goes
+            ' through EngineChoice.Normalize: a stored value this version cannot
+            ' honour has to become "not configured" rather than a broken attempt
+            ' that fails later and somewhere else.
+            If sourceMap.TryGetValue("remotePrimaryUrl", foundValue) Then
+                RemotePrimaryUrl = Remote.RemoteServers.Normalize(foundValue)
+            End If
+            If sourceMap.TryGetValue("remotePrimaryToken", foundValue) Then
+                RemotePrimaryToken = If(foundValue, String.Empty)
+            End If
+            If sourceMap.TryGetValue("remoteSecondaryUrl", foundValue) Then
+                RemoteSecondaryUrl = Remote.RemoteServers.Normalize(foundValue)
+            End If
+            If sourceMap.TryGetValue("remoteSecondaryToken", foundValue) Then
+                RemoteSecondaryToken = If(foundValue, String.Empty)
+            End If
+            If sourceMap.TryGetValue("remoteEnabled", foundValue) Then
+                RemoteEnabled = (foundValue = "1")
             End If
         End Sub
     End Class

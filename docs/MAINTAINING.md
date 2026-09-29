@@ -62,14 +62,12 @@ node tools/proto/tls13.mjs cloudflare.com
 # the only way those assertions execute at all off-device. Keep the two in step.
 node tools/proto/core-logic.mjs
 
-# Text measurement: the seam layout depends on. Must print "10/10 checks passed".
-node tools/proto/textmeasure.mjs
-
-# Block and inline layout. Must print "19/19 checks passed". This is the
-# transliteration source for LayoutBox.vb / BlockLayout.vb / InlineLayout.vb, and
-# it is the only way those numbers are verified off-device: nothing else in this
-# repository predicts where a box lands.
-node tools/proto/boxlayout.mjs
+# The remote render servers: a primary, a secondary tried only when the primary
+# cannot be reached, and no third option. Must print "19/19 checks passed".
+# tools/proto/textmeasure.mjs and boxlayout.mjs used to sit here; they were the
+# referees for the on-device renderer and went with it (see "Round 9"), so this
+# slot is where a browser decides WHERE to render instead of HOW.
+node tools/proto/remote-servers.mjs
 
 # The engine-choice rule: what the automatic fallback decides, and the row that
 # matters most — an absent measurement is never grounds for switching engines.
@@ -1080,6 +1078,12 @@ that broke it was written by the process the loop describes.
 **Verified:** `node tools/proto/boxlayout.mjs` 19/19, `textmeasure.mjs` 10/10,
 `core-logic.mjs` 60 assertions, `check-vb.mjs` 0 finding(s), six configurations
 `BUILD_EXIT=0` with only the two deliberate `ResourceLoader` warnings.
+
+> **Superseded.** Both of those referees were deleted with the renderer they
+> measured, in Task 1 of the remote-render client plan — a green check standing
+> over a deleted implementation is worse than no check, because it reads as
+> coverage. The paragraph above is left as the record of what was verified when it
+> was written.
 **Not verified:** the on-device output. Nothing in this round has been drawn on a
 handset; the geometry is asserted off-device and the rendering is not asserted at
 all. Record the first real render's surprises here when someone runs it.
@@ -1156,8 +1160,47 @@ namespace in the solution — a false alarm on code that compiles, which is the 
 thing an import checker must never do. `RemoteProtocol.vb` had declared that
 namespace for a whole round and it stayed invisible until something imported it.
 
-**Verified:** `node tools/proto/remote-protocol.mjs` 91/91, `check-vb.mjs` 72
-groups / 0 finding(s), `core-logic.mjs` 60 assertions, `boxtree.mjs` 48/48,
+**Task 4 — a primary, a secondary, and one defect that would have been silent.**
+`RemoteServers.vb` holds the rule the request asked for: two servers, the second
+tried only when the first cannot be reached, and no third — because "add your own
+server" means replacing the secondary. The first draft of `Normalize` asked
+whether a colon appeared before a scheme, and `render.example.com:8443` has one:
+the host read as scheme `render.example.com`, the port as its path, the scheme was
+neither `https` nor `http`, and the function returned empty. A server a person had
+just typed would **vanish from the settings screen with no message at all**, which
+is worse than a rejected field, because there is nothing to correct. The test is
+`scheme://`, and `Uri` is no longer trusted for the rest either: the authority must
+look like a host, because what `Uri` accepts can differ between profiles and this
+function's contract is "nonsense becomes not configured". Both cases are pinned in
+`core-logic.mjs`.
+
+**The referee earned its keep twice on the day it was written.** `19/19` on first
+run took two corrections: the private constructor that makes the class
+uninstantiable was missing, and `LooksLikeAHost` initially refused a colon, so
+`https://host:8443` — a port, which is the normal way to reach a local server —
+was rejected by the very check meant to allow it. A behaviour-only test would have
+missed the first and a source-only test the second.
+
+**Two referees had to be retired with the code they measured.**
+`tools/proto/textmeasure.mjs` and `tools/proto/boxlayout.mjs` were the referees for
+the on-device renderer, and Task 1 deleted that renderer. They were left in the
+docs for a round, which is the worst of both worlds: a green check standing over a
+deleted implementation reads as coverage. Deleted, with the commands and table rows
+that named them. The same sweep found `tools/proto/modern-sites.mjs` asserting
+`mainPage.includes('>= 8')` — the auto-reader threshold, which had been moved into
+`EngineChoice.AutomaticFallbackThreshold` precisely so the number would live in one
+place. It now asserts that shape, so the *fix* stops reading as a regression.
+
+**And the group count was never a count of groups.** `checksRun` was incremented
+inside loops over files, so `check-vb.mjs` reported 71, 72 and 73 groups across
+three rounds in which exactly one group was added — and this file quoted all three.
+The run list is an array now and the number is its length: **16 groups over 17
+numbered categories**. A count that moves for reasons the reader cannot see is
+worth less than no count, and it had been copied into two documents.
+
+**Verified:** `node tools/proto/remote-protocol.mjs` 91/91,
+`remote-servers.mjs` 19/19, `check-vb.mjs` 16
+groups / 0 finding(s), `core-logic.mjs` 66 assertions, `boxtree.mjs` 48/48,
 `engine-choice.mjs` 23/23, `gen-vectors.mjs` 53 assertions, `check-polyfill.mjs`
 ES5-valid, and `vm-build.cmd /t:Rebuild` on the guest with
 `=== Real compiler errors === none` and **only the two deliberate `BC40000`
@@ -1199,10 +1242,9 @@ What is and is not covered:
 | `tests/BrowserForWP.Crypto.Tests/` (`Vectors.generated.vb` + `VectorsSmokeTests.vb`) | Generated VB constants from those same vectors, plus length/shape checks. | **Compiled by the guest build; never executed.** |
 | `tests/BrowserForWP.Core.Tests/CoreLogicTests.vb` | Address normalisation, tab state, session/UA, settings, history, favourites, pin normalisation, hostname wildcards, language matching. | **Compiled by the guest build; never executed.** |
 | `tools/proto/core-logic.mjs` | A transliteration of `CoreLogicTests.vb`. 60 assertions, exit 1 on failure. | `node`, on any machine. **This is what actually runs those assertions.** |
-| `tools/proto/textmeasure.mjs` | The measurer's arithmetic, plus parity with the VB that implements it. | `node`, on any machine. |
-| `tools/proto/boxlayout.mjs` | Block widths and heights, line breaking, alignment. The referee for `BlockLayout.vb` / `InlineLayout.vb`. | `node`, on any machine. |
+| `tools/proto/remote-servers.mjs` | `RemoteServers.vb`: url normalisation, the primary/secondary order, duplicate collapsing, and the source contract that Core holds resource keys and not prose. | `node`, on any machine. |
 | `tools/proto/engine-choice.mjs` | The `EngineChoice` decision table, plus the source contract around it: the constants by name, and the reasons as resource keys rather than sentences. | `node`, on any machine. |
-| `tools/check-vb.mjs` | 17 categories / 72 check groups over every `.vb`, `.vbproj`, `.xaml` and `.resw`, including every `{ThemeResource}` key, every project's flavour GUID, (group 13) doc-comment structure, (group 15) every privileged API name and every manifest capability that would ask the platform for something it cannot grant, (group 16) every API whose capability the manifest fails to declare, and (group 17) every declaration that names a VB keyword. | `node`, on any machine. |
+| `tools/check-vb.mjs` | 17 categories / 16 check groups over every `.vb`, `.vbproj`, `.xaml` and `.resw`, including every `{ThemeResource}` key, every project's flavour GUID, (group 13) doc-comment structure, (group 15) every privileged API name and every manifest capability that would ask the platform for something it cannot grant, (group 16) every API whose capability the manifest fails to declare, and (group 17) every declaration that names a VB keyword. | `node`, on any machine. |
 | `tools/keyword-probe/`, `tools/keyword-probe.cmd` | One `Dim <word> As Integer` per candidate, compiled by the real vbc, so group 17's list is measured rather than quoted. Batched, with a per-batch sentinel, because vbc 12 stops after about a hundred errors **with no message** and the first single-file version read that truncation as "legal". | `bash`, with the guest reachable. |
 | `tools/wp81-theme-keys.sh` | Regenerates `tools/wp81-theme-keys.txt`, the 523 theme-resource keys Windows Phone 8.1 defines, read from the guest's design dictionaries. | `bash`, with the guest reachable. |
 | `tools/vm-build.cmd` | The real compiler, and the arbiter of pass/fail. | The Windows guest. |

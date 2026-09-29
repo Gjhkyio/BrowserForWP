@@ -63,7 +63,15 @@ check('LiteRedirects.vb exists with RedirectUrl',
   liteVb.includes('Function RedirectUrl'));
 const mainPage = read('BrowserForWP/MainPage.xaml.vb');
 check('DOMContentLoaded hooked', mainPage.includes('DOMContentLoaded'));
-check('auto-reader threshold', mainPage.includes('>= 8'));
+// The auto-reader threshold used to be a bare `>= 8` in the shell. It is now
+// EngineChoice.AutomaticFallbackThreshold, because two literals spelling the same
+// rule is one place for them to disagree -- so this asserts the SHAPE that
+// replaced it: the shell asks EngineChoice instead of carrying the number. A
+// check pinned to the literal would have gone red for the fix rather than for a
+// regression, which is what happened.
+check('auto-reader threshold comes from EngineChoice, not a literal in the shell',
+  mainPage.includes('EngineChoice.AutomaticFallbackThreshold')
+  && !/MissingFeatures\.Count\s*>=\s*\d/.test(mainPage));
 check('reader fallback string used', mainPage.includes('ReaderFallback'));
 check('lite redirect enforced', mainPage.includes('LiteRedirects.RedirectUrl'));
 const settings = read('BrowserForWP.Core/Storage/AppSettings.vb');

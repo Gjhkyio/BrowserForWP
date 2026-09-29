@@ -81,7 +81,6 @@ const QUIET = process.argv.includes('--quiet');
 const ROOT = process.cwd();
 
 let findings = [];
-let checksRun = 0;
 
 function fail(check, file, message, line) {
   findings.push({ check, file, message, line });
@@ -218,7 +217,6 @@ function nextCodeLine(lines, from) {
 }
 
 function checkBlockBalance(file, lines) {
-  checksRun++;
   // Pairs of (opener, terminator). Inside a single-line statement no block is
   // opened, so `Next`/`Loop` etc. are matched against the innermost opener.
   const stack = [];
@@ -392,7 +390,6 @@ function checkNamespacesAndImports() {
       for (const ns of namespaces) knownNamespaces.add(ns);
     }
   }
-  checksRun++;
 
   for (const project of projects) {
     const sources = walk(project.dir, (f) => f.endsWith('.vb'));
@@ -427,7 +424,6 @@ function checkNamespacesAndImports() {
 // ── 3. Project file vs disk parity ──────────────────────────────────────────
 function checkProjectParity() {
   heading('Project file / disk parity');
-  checksRun++;
   let anyBad = false;
 
   for (const project of projects) {
@@ -514,7 +510,6 @@ const WINDOWS_STORE_FLAVOR_GUID = '{BC8A1FFA-BEE3-4634-8014-F334798102B3}';
 
 function checkProjectFlavor() {
   heading('Project flavour (WindowsPhoneApp vs Windows Store)');
-  checksRun++;
   let anyBad = false;
 
   for (const project of projects) {
@@ -574,7 +569,6 @@ function checkProjectFlavor() {
 // ── 4. Implements completeness ──────────────────────────────────────────────
 function checkImplements() {
   heading('Implements completeness');
-  checksRun++;
   let anyBad = false;
 
   for (const project of projects) {
@@ -624,7 +618,6 @@ const IMPLEMENTED_MEMBERS_BY_INTERFACE = {
 // ── 6. Resource parity ─────────────────────────────────────────────────────
 function checkResourceParity() {
   heading('Localization resource parity');
-  checksRun++;
 
   const reswFiles = walk(ROOT, (f) => f.endsWith('Resources.resw'));
   if (reswFiles.length === 0) {
@@ -665,7 +658,6 @@ function checkResourceParity() {
 // ── 7. XAML handler wiring ─────────────────────────────────────────────────
 function checkXamlHandlers() {
   heading('XAML event handler wiring');
-  checksRun++;
   let anyBad = false;
 
   const xamlFiles = walk(ROOT, (f) => f.endsWith('.xaml'));
@@ -725,7 +717,6 @@ function countRootChildren(xml, rootTag) {
 
 function checkXamlRoot() {
   heading('XAML single root child');
-  checksRun++;
   let anyBad = false;
 
   for (const xaml of walk(ROOT, (f) => f.endsWith('.xaml'))) {
@@ -784,7 +775,6 @@ function loadWp81ThemeKeys() {
 
 function checkXamlThemeResources() {
   heading('XAML theme-resource keys (WP8.1)');
-  checksRun++;
   let anyBad = false;
 
   const platform = loadWp81ThemeKeys();
@@ -826,7 +816,6 @@ function checkXamlThemeResources() {
 // Char.ConvertFromUtf32, which returns a String.
 function checkCharLiterals() {
   heading('Char-range literals');
-  checksRun++;
   let anyBad = false;
 
   for (const project of projects) {
@@ -867,7 +856,6 @@ function checkCharLiterals() {
 // block, which reads the same and compiles.
 function checkVb12Syntax() {
   heading('VB 12 syntax (no VS2015-only constructs)');
-  checksRun++;
   let anyBad = false;
 
   for (const project of projects) {
@@ -923,7 +911,6 @@ const PROFILE_HAZARDS = [
 
 function checkProfileHazards() {
   heading('NETFX_CORE profile hazards');
-  checksRun++;
   let anyBad = false;
 
   for (const project of projects) {
@@ -967,7 +954,6 @@ const XML_ISH = ['.vbproj', '.xaml', '.appxmanifest', '.resw', '.sln', '.xml'];
 
 function checkCommentHazards() {
   heading('Comment hazards (XML comments, doc comments)');
-  checksRun++;
   let anyBad = false;
 
   // Doubled dashes inside an XML comment, in any XML-ish file.
@@ -1199,7 +1185,6 @@ const PRIVILEGED_CAPABILITIES = [
 
 function checkPrivilegedAccess() {
   heading('Privileged access (JIT, process creation, full-trust capabilities)');
-  checksRun++;
   let anyBad = false;
 
   for (const project of projects) {
@@ -1305,7 +1290,6 @@ const CAPABILITY_IMPLIES = {
 
 function checkCapabilityRequirements() {
   heading('Capability requirements (code vs Package.appxmanifest)');
-  checksRun++;
 
   const declared = new Set();
   for (const manifest of walk(ROOT, (f) => f.endsWith('.appxmanifest'))) {
@@ -1435,7 +1419,6 @@ function declaredNames(line) {
 
 function checkReservedNames() {
   heading('reserved words used as names');
-  checksRun++;
   let anyBad = false;
 
   // A self-test, in both directions. A regex that silently stops matching turns
@@ -1485,29 +1468,42 @@ console.log('VB.NET structural checker — BrowserForWP');
 console.log('(This is NOT a compiler. See the header for exactly what it proves.)');
 
 heading('Block balance');
-for (const project of projects) {
-  for (const src of walk(project.dir, (f) => f.endsWith('.vb'))) {
-    checkBlockBalance(src, cleanLines(fs.readFileSync(src, 'utf8')));
-  }
-}
+// A LIST rather than a sequence of calls, so the number printed below is the
+// number of groups that actually ran.
+//
+// The counter this replaced was incremented in a loop over files inside several
+// groups, so "N check group(s) run" read 71, then 72, then 73 across three rounds
+// in which exactly ONE group was added. A count that moves for reasons the reader
+// cannot see is worse than no count, and both docs quoted it.
+const GROUPS = [
+  // 1 — block balance, per file.
+  () => {
+    for (const project of projects) {
+      for (const src of walk(project.dir, (f) => f.endsWith('.vb'))) {
+        checkBlockBalance(src, cleanLines(fs.readFileSync(src, 'utf8')));
+      }
+    }
+  },
+  checkProjectParity,
+  checkProjectFlavor,
+  checkNamespacesAndImports,
+  checkImplements,
+  checkResourceParity,
+  checkXamlHandlers,
+  checkXamlRoot,
+  checkXamlThemeResources,
+  checkCharLiterals,
+  checkVb12Syntax,
+  checkProfileHazards,
+  checkCommentHazards,
+  checkPrivilegedAccess,
+  checkCapabilityRequirements,
+  checkReservedNames,
+];
 
-checkProjectParity();
-checkProjectFlavor();
-checkNamespacesAndImports();
-checkImplements();
-checkResourceParity();
-checkXamlHandlers();
-checkXamlRoot();
-checkXamlThemeResources();
-checkCharLiterals();
-checkVb12Syntax();
-checkProfileHazards();
-checkCommentHazards();
-checkPrivilegedAccess();
-checkCapabilityRequirements();
-checkReservedNames();
+for (const group of GROUPS) group();
 
-console.log(`\n${checksRun} check group(s) run, ${findings.length} finding(s).`);
+console.log(`\n${GROUPS.length} check groups run, ${findings.length} finding(s).`);
 if (findings.length > 0) {
   console.log('\nFindings:');
   for (const f of findings) {
