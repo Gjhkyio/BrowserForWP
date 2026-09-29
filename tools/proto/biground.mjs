@@ -49,7 +49,7 @@ check('session tabs capped at 6', /MaxSessionTabs As Integer = 6/.test(read('Bro
 
 // ── single search default ──
 const appSet = read('BrowserForWP.Core/Storage/AppSettings.vb');
-check('SearchTemplate removed', !appSet.includes('SearchTemplate'));
+check('SearchTemplate property removed', !appSet.includes('Property SearchTemplate'));
 check('MigrateSearchTemplate removed', !appSet.includes('MigrateSearchTemplate'));
 check('search uses lite default', appSet.includes('DefaultSearchTemplate'));
 
