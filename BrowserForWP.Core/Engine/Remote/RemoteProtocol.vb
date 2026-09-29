@@ -144,13 +144,23 @@ Namespace Engine
 
         ''' <summary>
         ''' Splits a byte stream into frames.
-        '
-        ' A chunk is not a message: TCP has no boundaries, and a decoder that assumes
-        ' one frame per read works on a fast link and fails on a slow one. The buffer
-        ' is a single array with a start offset and a count, compacted in place, and
-        ' it is that shape rather than a List(Of Byte) because a frame is a JPEG of
-        ' up to two megabytes and a per-byte list would copy every byte twice on a
-        ' device with 512 MB of memory.
+        '''
+        ''' A chunk is not a message: TCP has no boundaries, and a decoder that assumes
+        ''' one frame per read works on a fast link and fails on a slow one. The buffer
+        ''' is a single array with a start offset and a count, compacted in place, and
+        ''' it is that shape rather than a List(Of Byte) because a frame is a JPEG of
+        ''' up to two megabytes and a per-byte list would copy every byte twice on a
+        ''' device with 512 MB of memory.
+        '''
+        ''' The apostrophes above are all TRIPLED on purpose. A single one ends a doc
+        ''' block, so the closing summary tag below would belong to a second comment
+        ''' that never opened -- BC42301 plus BC42304, documentation discarded. Twice
+        ''' in one round; tools/check-vb.mjs group 13 now refuses the shape.
+        '''
+        ''' Note that the closing tag is not spelled out anywhere in this prose. A
+        ''' doc comment is parsed as XML, so writing one in a sentence closes the
+        ''' element early and the block's own closing tag is then unmatched -- the
+        ''' same trap at one remove, and it was written here while fixing it above.
         ''' </summary>
         Public NotInheritable Class RemoteFrameReader
 

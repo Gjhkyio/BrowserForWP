@@ -133,6 +133,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Dns\DohResolver.vb" />
+    <Compile Include="Remote\SealedChannel.vb" />
     <Compile Include="Http\HttpClient13.vb" />
     <Compile Include="Tls13\CertificateValidator.vb" />
     <Compile Include="Tls13\ClientHelloBuilder.vb" />

@@ -119,15 +119,26 @@ node tools/check-polyfill.mjs
 
 # Static VB.NET structural check. Must print "0 finding(s)", exit code 0.
 # This is NOT a compiler. It catches block-balance errors, missing Implements
-# members, project/disk drift, namespace mismatch, resw key drift, unwired XAML
-# handlers, {ThemeResource} keys the platform does not define, project flavour
-# GUIDs that disagree with the target platform, (group 15) any use of
-# Reflection.Emit, process creation, LoadLibrary or RWX-memory allocation plus
-# any manifest capability that asks for privilege the platform cannot grant, and
-# (group 16) any API whose required capability the manifest does not declare —
-# and it found a real End Property/End Class error. A green run still does not
-# mean the project compiles.
+# members, project/disk drift, namespace mismatch (including NESTED Namespace
+# blocks, which compose), resw key drift, unwired XAML handlers,
+# {ThemeResource} keys the platform does not define, project flavour GUIDs that
+# disagree with the target platform, (group 13) a plain ' comment stranded inside
+# a ''' doc block plus every doc-comment tag that is unknown, mis-nested or left
+# unclosed, (group 15) any use of Reflection.Emit, process creation, LoadLibrary
+# or RWX-memory allocation plus any manifest capability that asks for privilege
+# the platform cannot grant, (group 16) any API whose required capability the
+# manifest does not declare, and (group 17) any declaration that introduces a VB
+# keyword as a name — and it found a real End Property/End Class error. A green
+# run still does not mean the project compiles.
 node tools/check-vb.mjs
+
+# The keyword probe: measures, against the actual compiler, which VB keywords
+# vbc 12 refuses as an identifier. Group 17's list comes from here and NOT from
+# the language reference, which lists `Out` as reserved while
+# `Dim out(31) As Byte` compiles -- and it is on disk in X25519.vb. Needs the
+# guest; the check itself does not.
+prlctl exec "{66a2f493-162c-4b3f-ba40-0a26020cc818}" cmd /c \
+    "C:\Mac\Home\Documents\BrowserForWP\tools\keyword-probe.cmd"
 
 # Regenerate the theme-resource key list that check-vb.mjs group 9 reads: the
 # keys Windows Phone 8.1 itself defines, read out of the guest's design
@@ -644,7 +655,7 @@ probe and the pin store all exist and are wired. What remains is this.
    the Round 4 gap — but no runner invokes `RunAll()`. A WP8.1 ARM class library
    cannot run on the desktop, and there is no handset and no emulator, so
    **"compiled" is not "tested"**. The assertions now run off-device through
-   `tools/proto/core-logic.mjs` (53 assertions), a transliteration of
+   `tools/proto/core-logic.mjs` (60 assertions), a transliteration of
    `CoreLogicTests.vb` that must be kept in step with it. That mirror exists
    because the VB suite's first defect was invisible without execution: an
    assertion naming the heavy `duckduckgo.com` search URL that the lite-first
@@ -743,7 +754,7 @@ only the compiler checks that all four do.
 **Verified:** six configurations `BUILD_EXIT=0` with only the two deliberate
 `ResourceLoader` warnings; `engine-choice.mjs` 21/21; `boxtree.mjs` 48/48 (six of
 those are the transliterated `PageCss`, which moved out of `MainPage` this round);
-`core-logic.mjs` 62 assertions; `check-vb.mjs` 0 finding(s).
+`core-logic.mjs` 60 assertions; `check-vb.mjs` 0 finding(s).
 **Not verified:** the on-device output. Nothing in this round has run on a
 handset either, and the engine picker itself has never been seen. The first handset
 session should record, in this section, what the automatic fallback actually does
@@ -1067,11 +1078,95 @@ It is in the loop in `.agents/skills/browserforwp/SKILL.md` too, because the pla
 that broke it was written by the process the loop describes.
 
 **Verified:** `node tools/proto/boxlayout.mjs` 19/19, `textmeasure.mjs` 10/10,
-`core-logic.mjs` 55 assertions, `check-vb.mjs` 0 finding(s), six configurations
+`core-logic.mjs` 60 assertions, `check-vb.mjs` 0 finding(s), six configurations
 `BUILD_EXIT=0` with only the two deliberate `ResourceLoader` warnings.
 **Not verified:** the on-device output. Nothing in this round has been drawn on a
 handset; the geometry is asserted off-device and the rendering is not asserted at
 all. Record the first real render's surprises here when someone runs it.
+
+### Round 9 — the sealed channel, and three checks that had to be earned
+
+The remote-render client (plan `docs/superpowers/plans/2026-09-29-remote-render-client.md`,
+Task 3) adds two files: `BrowserForWP.Net/Remote/SealedChannel.vb`, which seals a
+frame with AES-256-GCM under a key derived from the device token and the
+connection's salt, and `BrowserForWP/Engine/RemoteChannel.vb`, which joins the
+protocol to the TLS client.
+
+**A layer boundary moved the design, and the boundary was right.** The obvious
+home for the sealed channel was `Core`, next to `RemoteProtocol`. `Core` may not
+reference `Crypto` ([`ARCHITECTURE.md`](ARCHITECTURE.md)), and the sealed channel
+IS the layer that holds a key — so it went to `Net`, which references only
+`Crypto`. And `Net` may not reference `Core`, so it cannot build the 16-byte header
+that is also the AEAD's additional authenticated data. Rather than write the header
+twice — a second implementation of the one thing `protocol/vectors.json` exists to
+pin — `SealedChannel` takes it as a `Func(Of Byte, UInteger, UInteger, Byte())`
+delegate and refuses a null one. `RemoteChannel` lives in the app because the app is
+the only layer that may see both. `tools/proto/remote-protocol.mjs` grew from 53 to
+91 checks and asserts both halves; two of those checks went red the moment `next`
+was renamed (below), which is the referee reading the source rather than trusting it.
+
+**A VB keyword as a local variable, and eleven errors that all named the wrong
+thing.** `Dim next As UInteger = _outSequence + 1UI` — `Next` closes a `For`. vbc
+answered with `BC30201` on that line and then `BC30451 "'header' is not declared"`
+for each of the eleven following lines, every one of them naming something that
+plainly IS declared. Nothing in this repository could have caught it: `check-vb.mjs`
+had no group for name legality, and `tools/proto/remote-protocol.mjs` reads source
+text for structure, not for legal identifiers. That is the worst ratio this project
+has had between "one mistake" and "warnings that mislead".
+
+**Group 17 exists now, and its list is MEASURED.** The first version of the list
+was written from the language reference, and the reference is not the compiler:
+`Out` is in its reserved list and `Dim out(31) As Byte` compiles — it is on disk in
+`X25519.vb` and that project builds in all six configurations. So
+tools/keyword-probe compiles one `Dim <word> As Integer` per candidate and reads the
+answer: **117 candidates, 113 refused, 4 accepted** (`out`, `async`, `await`,
+`custom`). All four would have been false positives.
+
+**And the first probe run was wrong in the other direction.** One file, 117
+candidates: vbc reported one error per candidate up to line 146 and then stopped,
+with no message, because vbc 12 is pre-Roslyn and gives up after about a hundred
+errors. The last sixteen words came back "legal" because they had never been
+compiled. The probe is now three batches of under fifty declarations, each ending
+with a sentinel whose refusal proves the batch reached its end, and the wrapper
+prints that verdict rather than a count. A measurement whose failure mode is
+silence needs a witness, not a bigger sample.
+
+**Group 13 earned two more rules, both from the same defect, twice in one round.**
+A plain `'` comment stranded inside a `'''` doc block ends the block, so the
+closing tag that follows belongs to a second comment that never opened —
+`BC42301` plus `BC42304`, and the documentation is discarded. It appeared in
+`SealedChannel.vb` and then in `RemoteProtocol.vb`, written one round earlier. Then
+the fix for the second one introduced the same trap at one remove: prose that
+mentions a closing summary tag closes the element early, and the guest build said `BC42304` again. Group 13 previously looked only for `<` followed by a *digit* — one
+way to reach the warning, not the rule. It now balances the tags. It also reported
+`<paramref>` as an unknown tag, which the compiler accepts: the allow-list is
+checked against the compiler too.
+
+All three of those are warnings. A warning does not fail a build, and that is
+precisely the harm: three cheap findings that train a reader to skim the warning
+list, which is where the next real one will be. The one rule this round added to
+the table above is therefore about *warnings* as much as about keywords.
+
+**A namespace checker that could not see nesting.** `fileNamespaces` matched every
+`Namespace` line separately and prefixed the project's root namespace, so
+`Namespace Engine` / `Namespace Remote` produced `…Core.Engine` and `…Core.Remote`
+and never `…Core.Engine.Remote`. The compiler composes them. A correct
+`Imports BrowserForWP.Core.Engine.Remote` was therefore reported as matching no
+namespace in the solution — a false alarm on code that compiles, which is the one
+thing an import checker must never do. `RemoteProtocol.vb` had declared that
+namespace for a whole round and it stayed invisible until something imported it.
+
+**Verified:** `node tools/proto/remote-protocol.mjs` 91/91, `check-vb.mjs` 72
+groups / 0 finding(s), `core-logic.mjs` 60 assertions, `boxtree.mjs` 48/48,
+`engine-choice.mjs` 23/23, `gen-vectors.mjs` 53 assertions, `check-polyfill.mjs`
+ES5-valid, and `vm-build.cmd /t:Rebuild` on the guest with
+`=== Real compiler errors === none` and **only the two deliberate `BC40000`
+`ResourceLoader` warnings** — the doc-comment warnings are gone. The keyword probe
+self-checks all three batches.
+**Not verified:** the channel has never spoken to a live server. `SealedChannel`'s
+bytes are pinned by vectors and `RemoteChannel` is a socket, a loop and error
+handling, but the handshake has not run against the Node server, and nothing has
+been drawn on a handset.
 
 ## The loop
 
@@ -1103,11 +1198,12 @@ What is and is not covered:
 | `tools/gen-vectors.mjs`, `tools/proto/*.mjs` | The executable prototypes. `gen-vectors.mjs` recomputes HKDF, X25519 and AES-GCM and asserts RFC 5869 / 7748 / 8448 and NIST CAVS vectors; `tls13.mjs` completes real handshakes against live servers. | `node`, on any machine. **This is the real crypto verification.** |
 | `tests/BrowserForWP.Crypto.Tests/` (`Vectors.generated.vb` + `VectorsSmokeTests.vb`) | Generated VB constants from those same vectors, plus length/shape checks. | **Compiled by the guest build; never executed.** |
 | `tests/BrowserForWP.Core.Tests/CoreLogicTests.vb` | Address normalisation, tab state, session/UA, settings, history, favourites, pin normalisation, hostname wildcards, language matching. | **Compiled by the guest build; never executed.** |
-| `tools/proto/core-logic.mjs` | A transliteration of `CoreLogicTests.vb`. 55 assertions, exit 1 on failure. | `node`, on any machine. **This is what actually runs those assertions.** |
+| `tools/proto/core-logic.mjs` | A transliteration of `CoreLogicTests.vb`. 60 assertions, exit 1 on failure. | `node`, on any machine. **This is what actually runs those assertions.** |
 | `tools/proto/textmeasure.mjs` | The measurer's arithmetic, plus parity with the VB that implements it. | `node`, on any machine. |
 | `tools/proto/boxlayout.mjs` | Block widths and heights, line breaking, alignment. The referee for `BlockLayout.vb` / `InlineLayout.vb`. | `node`, on any machine. |
 | `tools/proto/engine-choice.mjs` | The `EngineChoice` decision table, plus the source contract around it: the constants by name, and the reasons as resource keys rather than sentences. | `node`, on any machine. |
-| `tools/check-vb.mjs` | 16 categories / 75 check groups over every `.vb`, `.vbproj`, `.xaml` and `.resw`, including every `{ThemeResource}` key, every project's flavour GUID, (group 15) every privileged API name and every manifest capability that would ask the platform for something it cannot grant, and (group 16) every API whose capability the manifest fails to declare. | `node`, on any machine. |
+| `tools/check-vb.mjs` | 17 categories / 72 check groups over every `.vb`, `.vbproj`, `.xaml` and `.resw`, including every `{ThemeResource}` key, every project's flavour GUID, (group 13) doc-comment structure, (group 15) every privileged API name and every manifest capability that would ask the platform for something it cannot grant, (group 16) every API whose capability the manifest fails to declare, and (group 17) every declaration that names a VB keyword. | `node`, on any machine. |
+| `tools/keyword-probe/`, `tools/keyword-probe.cmd` | One `Dim <word> As Integer` per candidate, compiled by the real vbc, so group 17's list is measured rather than quoted. Batched, with a per-batch sentinel, because vbc 12 stops after about a hundred errors **with no message** and the first single-file version read that truncation as "legal". | `bash`, with the guest reachable. |
 | `tools/wp81-theme-keys.sh` | Regenerates `tools/wp81-theme-keys.txt`, the 523 theme-resource keys Windows Phone 8.1 defines, read from the guest's design dictionaries. | `bash`, with the guest reachable. |
 | `tools/vm-build.cmd` | The real compiler, and the arbiter of pass/fail. | The Windows guest. |
 | `tools/wmc9999-probe.sh` | Build-diagnostic characterisation and XAML output invariance. | `bash`, on the host. |

@@ -345,12 +345,36 @@ const projects = projectFiles.map((f) => {
 });
 const projectByName = new Map(projects.map((p) => [p.name, p]));
 
-// Full namespace of a file = RootNamespace + the file's own Namespace block.
+// Full namespace of a file = RootNamespace + the file's own Namespace blocks,
+// NESTED ONES COMPOSED.
+//
+// They compose, and the first version of this function did not know that: it
+// matched every `Namespace` line on its own and prefixed the root namespace, so
+//
+//     Namespace Engine
+//         Namespace Remote
+//
+// produced BrowserForWP.Core.Engine and BrowserForWP.Core.Remote, and never
+// BrowserForWP.Core.Engine.Remote. The compiler composes them, so a perfectly
+// correct `Imports BrowserForWP.Core.Engine.Remote` was reported as matching no
+// namespace in the solution -- a false alarm on code that compiles, which is the
+// one thing an import checker must never do. Found when RemoteChannel.vb became
+// the first file to import a nested namespace; RemoteProtocol.vb had declared it
+// for a whole round before that, invisible.
 function fileNamespaces(source, project) {
-  const declared = [...source.matchAll(/^\s*Namespace\s+([\w.]+)\s*$/gm)].map((m) => m[1]);
-  if (declared.length === 0) return [project.rootNamespace];
-  return declared.map((d) =>
-    project.rootNamespace ? `${project.rootNamespace}.${d}` : d);
+  const stack = [];
+  const namespaces = [project.rootNamespace];
+  for (const line of cleanLines(source)) {
+    const trimmed = line.trim();
+    const open = /^Namespace\s+([\w.]+)$/.exec(trimmed);
+    if (open) {
+      stack.push(open[1]);
+      namespaces.push([project.rootNamespace, ...stack].filter(Boolean).join('.'));
+      continue;
+    }
+    if (/^End Namespace$/.test(trimmed)) stack.pop();
+  }
+  return namespaces;
 }
 
 function checkNamespacesAndImports() {
@@ -919,7 +943,7 @@ function checkProfileHazards() {
 }
 
 // ── 13. Comment hazards ──────────────────────────────────────────────────
-// Two ways a comment can break a build.
+// Three ways a comment can break a build.
 //
 //  * '--' is illegal inside an XML comment. The project file then fails to
 //    load at all (MSB4025), and in a solution build the symptom is the far less
@@ -929,6 +953,16 @@ function checkProfileHazards() {
 //  * An XML doc comment is parsed as XML. `<0..2^24-1>`, copied straight from
 //    an RFC's grammar, is an invalid tag name and the whole doc comment is
 //    discarded with a warning (BC42304). Escape it as &lt;...&gt;.
+//
+//  * A PLAIN APOSTROPHE COMMENT INSIDE A ''' DOC BLOCK. A doc comment is a run
+//    of `'''` lines; a line starting with a single `'` ends the block, so the
+//    `''' </summary>` that follows becomes a SECOND doc comment whose closing tag
+//    never matched anything. VB reports BC42301 plus BC42304 and throws the
+//    documentation away. It is a warning, so it does not fail a build -- and that
+//    is exactly the harm: two cheap warnings that train a reader to skim the
+//    warning list, which is where the next real one will be. Found twice in one
+//    round (SealedChannel.vb, then RemoteProtocol.vb), the second time by the
+//    guest build rather than by this group.
 const XML_ISH = ['.vbproj', '.xaml', '.appxmanifest', '.resw', '.sln', '.xml'];
 
 function checkCommentHazards() {
@@ -967,15 +1001,129 @@ function checkCommentHazards() {
     });
   }
 
-  // Unescaped '<' followed by a digit inside a ''' doc comment.
+  // Inside a ''' doc comment, every '<' must open or close a tag the doc-comment
+  // parser knows, the tags must nest, and they must balance by the end of the
+  // block.
+  //
+  // The first version of this check only looked for '<' followed by a DIGIT, to
+  // catch `<0..2^24-1>` copied out of an RFC. That is one way to reach BC42304,
+  // not the rule, and the narrow version let a second way through: prose that
+  // mentions a closing tag, like
+  //
+  //     ''' block. It leaves the </summary> below attached to nothing.
+  //
+  // closes the element early, so the block's OWN closing tag has nothing to close
+  // and the compiler discards the whole comment. That was written into
+  // RemoteProtocol.vb by the very edit that fixed the apostrophe defect -- the
+  // third time in one round that a doc-comment mistake surfaced as a warning
+  // nobody was reading.
+  // `paramref` and `typeparamref` belong here and were missing from the first
+  // draft: Tls13Client.vb uses `<paramref name="count"/>` in a summary, the
+  // compiler accepts it, and the check reported it as an unknown tag. The guest
+  // build is the arbiter for a tag list too, not the fact that a list looks
+  // complete while it is being written.
+  const DOC_TAGS = new Set(['summary', 'remarks', 'returns', 'param', 'paramref',
+    'typeparam', 'typeparamref', 'value', 'exception', 'example', 'code', 'c', 'see',
+    'seealso', 'para', 'list', 'listheader', 'item', 'term', 'description',
+    'include', 'permission', 'inheritdoc', 'br']);
+
   for (const project of projects) {
     for (const src of walk(project.dir, (f) => f.endsWith('.vb'))) {
-      fs.readFileSync(src, 'utf8').split(/\r?\n/).forEach((raw, idx) => {
-        if (!/^\s*'''/.test(raw)) return;
-        if (/<'?\d|<\d/.test(raw)) {
+      const lines = fs.readFileSync(src, 'utf8').split(/\r?\n/);
+      let stack = [];
+      let openedAt = 0;
+
+      const flush = () => {
+        if (stack.length > 0) {
           fail('comment', src,
-            'a doc comment is parsed as XML: "<0..2^24-1>" is an invalid tag name ' +
-            'and discards the comment with BC42304. Escape it as &lt;...&gt;.',
+            `a ''' doc block opens <${stack[0]}> and never closes it: BC42304 ` +
+            'discards the whole comment. Every tag opened here needs its closing ' +
+            'tag, written as XML.', openedAt);
+          anyBad = true;
+        }
+        stack = [];
+        openedAt = 0;
+      };
+
+      lines.forEach((raw, idx) => {
+        const text = raw.trim();
+        if (!text.startsWith("'''")) {
+          // A blank line, or a plain ' comment (reported by the check above), does
+          // not end the block for this purpose. Anything else does.
+          if (text !== '' && !text.startsWith("'")) flush();
+          return;
+        }
+
+        const body = text.slice(3);
+        for (let at = body.indexOf('<'); at !== -1; at = body.indexOf('<', at + 1)) {
+          const match = /^<(\/?)([A-Za-z][A-Za-z0-9]*)[^>]*?(\/?)>/.exec(body.slice(at));
+          const name = match ? match[2].toLowerCase() : '';
+          if (!match || !DOC_TAGS.has(name)) {
+            fail('comment', src,
+              'a doc comment is parsed as XML, and this "<" does not open or close ' +
+              `a tag the parser knows (it accepts ${[...DOC_TAGS].join(', ')}). ` +
+              'Escape a literal one as &lt;...&gt;, or the whole comment is ' +
+              'discarded with BC42304.',
+              idx + 1);
+            anyBad = true;
+            continue;
+          }
+          if (match[3] === '/') continue;                  // <br/> closes nothing
+          if (match[1] === '/') {
+            if (stack.length === 0 || stack[stack.length - 1] !== name) {
+              fail('comment', src,
+                `</${name}> here closes nothing: the doc block has ` +
+                (stack.length === 0
+                  ? 'no open tag'
+                  : `<${stack[stack.length - 1]}> open`) +
+                '. A doc comment is parsed as XML, so a closing tag written in ' +
+                "prose ends the element early and the block's own closing tag is " +
+                'then unmatched -- BC42304, and the documentation is discarded.',
+                idx + 1);
+              anyBad = true;
+              continue;
+            }
+            stack.pop();
+          } else {
+            if (stack.length === 0) openedAt = idx + 1;
+            stack.push(name);
+          }
+        }
+      });
+      flush();
+    }
+  }
+
+  // A plain `'` comment line stranded inside a `'''` doc block.
+  //
+  // The trigger is deliberately narrow, because the obvious rule ("a ' line
+  // inside an open doc block") also fires on a perfectly ordinary trailing
+  // comment after a finished doc comment, which would make this group noisy. So
+  // a line is flagged only when a `'''` line is the nearest comment line BEFORE
+  // it AND another comment line follows it: the comment run was clearly meant to
+  // be one block, and the single apostrophe splits it. When code follows instead,
+  // the doc comment above had already ended and the line is just a comment.
+  for (const project of projects) {
+    for (const src of walk(project.dir, (f) => f.endsWith('.vb'))) {
+      const lines = fs.readFileSync(src, 'utf8').split(/\r?\n/);
+      const significant = (from, step) => {
+        for (let i = from; i >= 0 && i < lines.length; i += step) {
+          const text = lines[i].trim();
+          if (text !== '') return text;
+        }
+        return '';
+      };
+      lines.forEach((raw, idx) => {
+        const text = raw.trim();
+        if (!text.startsWith("'") || text.startsWith("'''")) return;
+        const before = significant(idx - 1, -1);
+        const after = significant(idx + 1, 1);
+        if (before.startsWith("'''") && after.startsWith("'")) {
+          fail('comment', src,
+            "a plain ' comment inside a ''' doc block: the doc comment ends here, so " +
+            "the closing tag below belongs to a second doc comment that never " +
+            "opened. BC42301 plus BC42304, and the documentation is discarded. Use " +
+            "''' on every line of the block.",
             idx + 1);
           anyBad = true;
         }
@@ -983,7 +1131,10 @@ function checkCommentHazards() {
     }
   }
 
-  if (!anyBad) ok('no "--" in XML comments and no unescaped "<" in doc comments');
+  if (!anyBad) {
+    ok('no "--" in XML comments, no unmatched or unknown tag in a doc comment, ' +
+      "no plain comment inside a ''' block");
+  }
 }
 
 // ── 15. Privileged access: the APIs and capabilities Law 4 closes ────────
@@ -1204,6 +1355,131 @@ function checkCapabilityRequirements() {
   }
 }
 
+// ── 17. Reserved words used as names ──────────────────────────────────────
+// A VB keyword is not an identifier, and the compiler's reaction to finding one
+// is not "that name is a keyword". `Dim next As UInteger = _outSequence + 1UI`
+// produced BC30201 "expression expected" on that line and then eleven BC30451
+// "'header' is not declared" on the lines after it -- every one of them naming
+// something that plainly IS declared. The guest build caught it; this file did
+// not, which is the reason this group exists. Nothing here is exotic: `next`,
+// `error`, `step`, `date`, `set` and `in` are all words a person reaches for.
+//
+// THE LIST IS MEASURED, NOT QUOTED. It was first written from the language
+// reference, and the reference disagrees with the compiler: `Out` is in the
+// reference's reserved list and `Dim out(31) As Byte` compiles (it is in
+// BrowserForWP.Crypto/X25519.vb, and that project builds in all six
+// configurations). Twelve more words looked legal for a worse reason -- see
+// below. So the list below comes from tools/keyword-probe, which compiles one
+// `Dim <word> As Integer` per candidate and reads the compiler's answer.
+//
+// MEASURED 2026-09-29 with vbc 12.0.40629.0: 117 candidates, 113 refused with
+// BC30183 ("keyword not valid as an identifier"; `rem` gives BC30203 instead,
+// because Rem starts a comment), and FOUR ACCEPTED:
+//
+//     out   async   await   custom
+//
+// Those four are exactly the trap this comment exists for. `async` and `await`
+// are contextual keywords in VB and legal as names here; `custom` is a modifier
+// only inside a property; `out` is interop-era and simply not reserved. Adding
+// any of them would flag compiling code, which is how a build gate stops being
+// read.
+//
+// AND A SECOND TRAP, IN THE OTHER DIRECTION. The first run of the probe was one
+// file, and `mustinherit` through `custom` came back "legal" -- because vbc 12
+// is pre-Roslyn and GIVES UP after about a hundred errors, silently. They had
+// never been compiled. The probe now batches and each batch ends with a sentinel
+// whose refusal proves the batch reached its end. The first list would have
+// missed fourteen real keywords.
+const VB_RESERVED_AS_NAME = new Set([
+  'next', 'error', 'date', 'step', 'to', 'in', 'of', 'on', 'not', 'then', 'is', 'as',
+  'me', 'new', 'single', 'static', 'string', 'object', 'char', 'decimal', 'boolean',
+  'byte', 'short', 'long', 'integer', 'double', 'set', 'get', 'if', 'for', 'do', 'or',
+  'and', 'using', 'rem', 'lib', 'let', 'stop', 'resume', 'when', 'while',
+  'select', 'shared', 'partial', 'private', 'public', 'friend', 'protected', 'property',
+  'event', 'exit', 'loop', 'each', 'option', 'module', 'class', 'structure', 'interface',
+  'imports', 'inherits', 'implements', 'handles', 'return', 'continue', 'try', 'catch',
+  'finally', 'throw', 'call', 'typeof', 'with', 'xor', 'mod', 'like', 'alias', 'declare',
+  'delegate', 'enum', 'erase', 'goto', 'gosub', 'overloads', 'overridable', 'overrides',
+  'paramarray', 'raiseevent', 'readonly', 'redim', 'shadows', 'synclock', 'true', 'false',
+  'nothing', 'wend', 'writeonly', 'widening', 'narrowing', 'byval', 'byref', 'optional',
+  'default', 'mustinherit', 'mustoverride', 'notinheritable', 'notoverridable',
+  'directcast', 'trycast', 'gettype', 'addressof', 'else', 'elseif', 'end', 'endif',
+]);
+
+// The names a declaration on this line introduces. Only DECLARATION sites are
+// read, so a keyword used correctly in an expression (every `For ... Next` in
+// the repository, every `Not x`, every `If ... Then`) is not a finding -- a
+// group that flagged those would fire on essentially every file.
+function declaredNames(line) {
+  const names = [];
+  const patterns = [
+    [/\b(?:Dim|Static|Const|ReDim)\s+(\w+)/g, new Set()],
+    [/\bFor\s+Each\s+(\w+)/g, new Set()],
+    [/\bFor\s+(\w+)\s*(?:As|=)/g, new Set()],
+    [/\bCatch\s+(\w+)/g, new Set()],
+    [/\bUsing\s+(\w+)/g, new Set()],
+    [/\b(?:ByVal|ByRef|Optional)\s+(\w+)/g, new Set()],
+    // `Sub New` is a constructor, not a name called New.
+    [/\b(?:Function|Sub)\s+(?!New\b)(\w+)/g, new Set()],
+    [/\b(?:Property|Class|Structure|Interface|Enum|Module|Event)\s+(\w+)/g, new Set()],
+  ];
+  for (const [pattern, skip] of patterns) {
+    const re = new RegExp(pattern.source, pattern.flags);
+    let match;
+    while ((match = re.exec(line)) !== null) {
+      if (!skip.has(match[1].toLowerCase())) names.push(match[1]);
+    }
+  }
+  return names;
+}
+
+function checkReservedNames() {
+  heading('reserved words used as names');
+  checksRun++;
+  let anyBad = false;
+
+  // A self-test, in both directions. A regex that silently stops matching turns
+  // this group into decoration, and a regex that matches too much fires on
+  // `Public Sub New()`, which every class in the repository has.
+  const planted = ['Dim next As UInteger = 1', 'For Each error In items', 'Private Sub Step(x As Integer)'];
+  // The four measured-legal words are in here on purpose. They are the ones a
+  // reference-based list gets wrong, so a future edit that "restores" them fails
+  // this self-test rather than silently flagging code that compiles.
+  const innocent = ['Dim nextIndex As Integer = 1', 'Public Sub New()', 'If x Is Nothing Then',
+    'Dim fromDate As Date', 'For i As Integer = 0 To 10', 'Dim out As Integer',
+    'Dim async As Integer', 'Dim await As Integer', 'Dim custom As Integer'];
+  const missed = planted.filter((line) =>
+    !declaredNames(line).some((n) => VB_RESERVED_AS_NAME.has(n.toLowerCase())));
+  const falseAlarm = innocent.filter((line) =>
+    declaredNames(line).some((n) => VB_RESERVED_AS_NAME.has(n.toLowerCase())));
+  if (missed.length > 0 || falseAlarm.length > 0) {
+    fail('reserved', ROOT,
+      `the detector itself is broken: ${missed.length} planted declaration(s) not found, ` +
+      `${falseAlarm.length} innocent line(s) flagged. Fix this group before trusting it.`);
+    anyBad = true;
+  } else {
+    ok('the detector finds planted declarations and spares legal ones (self-test)');
+  }
+
+  for (const project of projects) {
+    for (const src of walk(project.dir, (f) => f.endsWith('.vb'))) {
+      const lines = cleanLines(fs.readFileSync(src, 'utf8'));
+      lines.forEach((line, idx) => {
+        for (const name of declaredNames(line)) {
+          if (!VB_RESERVED_AS_NAME.has(name.toLowerCase())) continue;
+          fail('reserved', src,
+            `'${name}' is a VB keyword and cannot be the name of anything. Rename it ` +
+            '(VB is case-insensitive, so any casing is the same word). Expect BC30201 '
+            + 'on this line and phantom "is not declared" errors on the lines that use it.',
+            idx + 1);
+          anyBad = true;
+        }
+      });
+    }
+  }
+  if (!anyBad) ok('no declaration introduces a VB keyword as a name');
+}
+
 // ── Run ────────────────────────────────────────────────────────────────────
 console.log('VB.NET structural checker — BrowserForWP');
 console.log('(This is NOT a compiler. See the header for exactly what it proves.)');
@@ -1229,6 +1505,7 @@ checkProfileHazards();
 checkCommentHazards();
 checkPrivilegedAccess();
 checkCapabilityRequirements();
+checkReservedNames();
 
 console.log(`\n${checksRun} check group(s) run, ${findings.length} finding(s).`);
 if (findings.length > 0) {
@@ -1239,7 +1516,7 @@ if (findings.length > 0) {
   }
   process.exit(1);
 }
-console.log('\nNo mechanical defects found in the sixteen checked categories.');
+console.log('\nNo mechanical defects found in the seventeen checked categories.');
 console.log('This still does NOT mean the project compiles. Build it for real:');
 console.log('');
 console.log('  prlctl exec "{66a2f493-162c-4b3f-ba40-0a26020cc818}" "cmd.exe" "/c" \\');

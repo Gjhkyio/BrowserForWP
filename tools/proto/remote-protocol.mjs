@@ -13,9 +13,17 @@
 //     server's encoders. A field added on one side and not the other is
 //     invisible on the wire and a garbled screen on a phone.
 //
+// It covers BOTH halves of the client's wire: Core/Engine/Remote/RemoteProtocol.vb,
+// which frames and shapes messages, and Net/Remote/SealedChannel.vb, which seals
+// them. The sealed half is checked in both directions -- rebuilding every frame
+// the client will SEND and opening every frame the server will send -- because
+// the second is the half a client cannot skip and the one a wrong tag order
+// breaks.
+//
 // The vectors are vendored from Docker-BrowserForWP/protocol/vectors.json. When
 // the server regenerates them, replace this copy in the same commit, or this
 // referee passes while the device is wrong.
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 
 let checks = 0;
@@ -216,6 +224,131 @@ check('the frame reader compacts before it grows', (() => {
   const growAt = ensureRoom[0].indexOf('* 2 - 1');
   return compactAt >= 0 && growAt >= 0 && compactAt < growAt;
 })());
+
+// ── The sealed layer, in Net, where a key may live ──────────────────────────
+// Net references only Crypto, so the header format is injected into the channel
+// rather than duplicated in it. That injection is asserted here, because a second
+// implementation of the header is exactly what the vectors exist to prevent.
+const SEALED_SOURCE = 'BrowserForWP.Net/Remote/SealedChannel.vb';
+const sealedRaw = fs.existsSync(SEALED_SOURCE) ? fs.readFileSync(SEALED_SOURCE, 'utf8') : '';
+const sealed = codeOnly(sealedRaw);
+
+check(`${SEALED_SOURCE} exists`, sealedRaw.length > 0);
+check('it is AES-256-GCM with a 12-byte nonce and a 16-byte tag',
+  /KeySize As Integer = 32/.test(sealed)
+  && /NonceSize As Integer = 12/.test(sealed)
+  && /TagSize As Integer = 16/.test(sealed));
+check('it requires the 32-byte session salt the server sends',
+  /SaltSize As Integer = 32/.test(sealed));
+check('it derives with HKDF, salt first and the TOKEN as the key material',
+  /Hkdf\.Extract\(sessionSalt, token\)/.test(sealed),
+  'Extract(salt, ikm) with the token as the ikm');
+check('it uses the server\'s two domain-separation strings',
+  /"bfwp\/render\/v1\/c2s"/.test(sealedRaw) && /"bfwp\/render\/v1\/s2c"/.test(sealedRaw));
+check('the CLIENT sends with c2s and receives with s2c',
+  /_outKey = Hkdf\.Expand\(prk, InfoServerToClient, KeySize\)/.test(sealed)
+  && /_inKey = Hkdf\.Expand\(prk, InfoClientToServer, KeySize\)/.test(sealed),
+  'both ends derive the same two keys and wire them opposite ways round; getting it wrong seals happily and opens nothing');
+check('the header is injected rather than implemented a second time',
+  /buildHeader As Func\(Of Byte, UInteger, UInteger, Byte\(\)\)/.test(sealed)
+  && /_buildHeader\(messageType,\s*frameSeq,\s*CUInt\(/.test(sealed),
+  'a second implementation of the header is what the vectors exist to prevent');
+check('a null header builder is refused at construction',
+  /If buildHeader Is Nothing Then/.test(sealed));
+check('a built header of the wrong length is refused rather than sent',
+  /If header Is Nothing OrElse header\.Length <> HeaderSize Then/.test(sealed));
+check('a wrapped frame counter rekeys instead of reusing a nonce',
+  /the frame counter wrapped; reconnect to rekey/.test(sealedRaw),
+  'a reused (key, nonce) pair in GCM is a catastrophic failure, not a degradation');
+check('the nonce is the sequence number in the last four of twelve bytes',
+  /Function NonceFor\(sequence As UInteger\) As Byte\(\)/.test(sealed)
+  && /nonce\(8\) = CByte\(\(sequence >> 24\) And &HFFUI\)/.test(sealed)
+  && /nonce\(11\) = CByte\(sequence And &HFFUI\)/.test(sealed));
+// The local is `frameSeq` and not `next`: `next` is a VB keyword and cannot be a
+// name. These two patterns carried the old name for exactly one build, and
+// failing here is the referee doing its job -- it reads the source, so a rename
+// has to be acknowledged rather than silently tolerated.
+check('the header is the additional authenticated data',
+  /AesGcm\.Seal\(_outKey, NonceFor\(frameSeq\), header, body\)/.test(sealed)
+  && /AesGcm\.Open\(_inKey, NonceFor\(sequence\), header, ciphertext, tag\)/.test(sealed));
+check('a replayed or reordered frame is refused',
+  /If sequence <= _inSequence Then/.test(sealed));
+check('the received counter advances only AFTER the tag verifies', (() => {
+  const openAt = sealed.indexOf('Public Function Open(');
+  if (openAt < 0) return false;
+  const decryptAt = sealed.indexOf('AesGcm.Open(', openAt);
+  const advanceAt = sealed.indexOf('_inSequence = sequence', openAt);
+  return decryptAt > 0 && advanceAt > decryptAt;
+})(), 'advancing first would let a forged frame make the next genuine one look like a replay');
+check('the tag is written after the ciphertext, where the server reads it',
+  sealed.includes('header.Length + sealedResult.Ciphertext.Length'));
+
+// ── The primitives, against the platform and the vectors ────────────────────
+// Mirrored from BrowserForWP.Crypto.Hkdf by hand, so this compares the VB's
+// intended arithmetic against an independent implementation rather than against
+// itself. The RFC 5869 vectors themselves are asserted in the server repository.
+function extract(salt, ikm) {
+  const key = salt && salt.length ? salt : Buffer.alloc(32);
+  return crypto.createHmac('sha256', key).update(ikm).digest();
+}
+function expand(prk, info, length) {
+  const out = Buffer.alloc(length);
+  let previous = Buffer.alloc(0);
+  for (let counter = 1, written = 0; written < length; counter += 1) {
+    const hmac = crypto.createHmac('sha256', prk);
+    hmac.update(previous);
+    hmac.update(info);
+    hmac.update(Buffer.from([counter]));
+    previous = hmac.digest();
+    const take = Math.min(32, length - written);
+    previous.copy(out, written, 0, take);
+    written += take;
+  }
+  return out;
+}
+
+const vectorToken = Buffer.from(VECTORS.inputs.tokenHex, 'hex');
+const vectorSalt = Buffer.from(VECTORS.inputs.sessionSaltHex, 'hex');
+const prk = extract(vectorSalt, vectorToken);
+
+check('the key schedule reproduces the server PRK',
+  prk.toString('hex') === VECTORS.keySchedule.prkHex);
+check('the client-to-server key reproduces the server key',
+  expand(prk, Buffer.from('bfwp/render/v1/c2s', 'utf8'), 32).toString('hex')
+    === VECTORS.keySchedule.clientToServerKeyHex);
+check('the server-to-client key reproduces the server key',
+  expand(prk, Buffer.from('bfwp/render/v1/s2c', 'utf8'), 32).toString('hex')
+    === VECTORS.keySchedule.serverToClientKeyHex);
+
+// Every frame the CLIENT will send, rebuilt from its own parts.
+for (const vector of VECTORS.frames) {
+  const cipher = crypto.createCipheriv('aes-256-gcm', Buffer.from(vector.keyHex, 'hex'),
+    Buffer.from(vector.nonceHex, 'hex'));
+  cipher.setAAD(Buffer.from(vector.aadHex, 'hex'));
+  const rebuilt = Buffer.concat([
+    Buffer.from(vector.aadHex, 'hex'),
+    cipher.update(Buffer.from(vector.plaintextHex, 'hex')),
+    cipher.final(),
+    cipher.getAuthTag(),
+  ]);
+  check(`the sealed frame ${vector.name} can be rebuilt from its own parts`,
+    rebuilt.toString('hex') === vector.frameHex,
+    `\n     ours   ${rebuilt.toString('hex')}\n     server ${vector.frameHex}`);
+}
+
+// And the other direction: every frame the SERVER sends must open. A wrong tag
+// order fails here rather than on a phone, where it would look like a blank page.
+for (const vector of VECTORS.frames.filter((entry) => entry.direction === 'server-to-client')) {
+  const frame = Buffer.from(vector.frameHex, 'hex');
+  const tagAt = frame.length - 16;
+  const decipher = crypto.createDecipheriv('aes-256-gcm', Buffer.from(vector.keyHex, 'hex'),
+    Buffer.from(vector.nonceHex, 'hex'));
+  decipher.setAAD(frame.subarray(0, 16));
+  decipher.setAuthTag(frame.subarray(tagAt));
+  const opened = Buffer.concat([decipher.update(frame.subarray(16, tagAt)), decipher.final()]);
+  check(`the server frame ${vector.name} opens to its plaintext`,
+    opened.toString('hex') === vector.plaintextHex);
+}
 
 console.log(`\n${checks - failures}/${checks} remote-protocol checks passed.`);
 if (failures > 0) {

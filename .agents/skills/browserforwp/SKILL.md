@@ -82,6 +82,27 @@ makes every `ExtensionType.X` in the file report "'X' is not a member of
 `Default`/`DefaultTag` (a keyword), and `value` inside `Function Value()`
 (`BC30290`). Name locals after what they *hold*, not after the type.
 
+**Second-and-seven-eighths — a VB keyword is not a name, and the compiler will not
+say so.** `Dim next As UInteger = _outSequence + 1UI` produced `BC30201
+"expression expected"` on that one line and then **eleven** `BC30451 "'header' is
+not declared"` lines after it, every one of them naming something that plainly IS
+declared. Eleven errors, none of which names the cause, from one word. `next`,
+`error`, `date`, `step`, `set`, `in`, `of`, `to` are all words a person reaches for
+without thinking. `tools/check-vb.mjs` group 17 refuses the shape now.
+
+**Its word list is MEASURED, not quoted.** The first version came from the language
+reference, and the reference disagrees with the compiler: `Out` is in its reserved
+list and `Dim out(31) As Byte` compiles — it is on disk in `X25519.vb` and that
+project builds in all six configurations. `async`, `await` and `custom` are
+tolerated too. So the list comes from `tools/keyword-probe.cmd`, which compiles one
+`Dim <word> As Integer` per candidate and reads the answer (117 candidates, 113
+refused, 4 accepted). **Never add a word to group 17 without running the probe.**
+And note what the probe's own first run taught: a single file with 117 candidates
+reported "legal" for the last sixteen, because vbc 12 is pre-Roslyn and gives up
+after about a hundred errors *with no message*. It is batched now, with a sentinel
+at the end of each batch. When a measurement can fail by going quiet, the sample
+size is not the problem — a witness is.
+
 **Second-and-seven-eighths — a `{ThemeResource}` key is resolved at page LOAD, so
 no build here can check it.** It has to exist in the **phone's** dictionaries, not
 the desktop's: Windows 8.1 ships its own `themeresources.xaml` and `generic.xaml`
@@ -216,7 +237,10 @@ verified if you skipped its command.
 | Any claim about re-configuring Trident | `node tools/proto/ie-adapt.mjs` | `9/9 checks passed` |
 | Any claim about leaving the AppContainer, or about getting JIT memory | `node tools/proto/sandbox-escape.mjs` | `15/15 checks passed` |
 | `BrowserForWP.Polyfill/compat.js` | `node tools/check-polyfill.mjs` | `is valid ES5` |
-| Any `.vb`, `.vbproj`, `.xaml` or `.resw` | `node tools/check-vb.mjs` | `0 finding(s)`, exit code 0 |
+| Any `.vb`, `.vbproj`, `.xaml` or `.resw` | `node tools/check-vb.mjs` | `0 finding(s)`, exit code 0 (72 groups, 17 categories) |
+| A declaration that names a VB keyword (`Dim next`, `Function Error`) | `node tools/check-vb.mjs` | `0 finding(s)`; group 17. Its word list is measured by `tools/keyword-probe.cmd`, not quoted from the language reference |
+| Any `'''` doc comment, and any `Imports` of a BrowserForWP namespace | `node tools/check-vb.mjs` | `0 finding(s)`; group 13 balances doc-comment tags and refuses a plain `'` line stranded inside a `'''` block, and group 2 composes NESTED `Namespace` blocks. Both cost real warnings in Round 9 |
+| Adding or changing a word in group 17 | `tools\keyword-probe.cmd` in the guest | all three batches report `sentinel refused` and `controls clean`; the refused line numbers ARE the measurement. A batch whose sentinel is not refused is void, not clean |
 | A manifest capability, or any use of JIT / process creation / full trust | `node tools/check-vb.mjs` | `0 finding(s)`; group 15 refuses `Reflection.Emit`, `CreateProcess`, `Process.Start`, `LoadLibrary`, `VirtualAlloc`/`VirtualProtect` and the capabilities `runFullTrust`, `codeGeneration`, `allowElevation`, `packageManagement` |
 | Any API that a capability gates (location, camera, microphone, contacts, calendar, libraries, network) | `node tools/check-vb.mjs` | `0 finding(s)`; group 16 fails when the code uses such an API and no manifest declares the capability. It is one-directional on purpose — a browser may hold capabilities no line of its code references, because hosted pages are what ask |
 | A `{ThemeResource}` key in XAML | `node tools/check-vb.mjs` | `0 finding(s)`; group 9 checks every key against `tools/wp81-theme-keys.txt` |
@@ -295,8 +319,14 @@ tools/proto/boxlayout.mjs     ← block/inline layout numbers (referee)
 tools/proto/engine-choice.mjs ← which engine renders, and when it may fall back
 BrowserForWP/Engine/NativeEngine.vb ← this repository's own engine, behind the
                                  same IBrowserEngine seam as the WebView
-tools/check-vb.mjs            ← 16 categories / 75 check groups of static
-                                 VB/XAML/project/resw/theme-key/flavour checks
+tools/check-vb.mjs            ← 17 categories / 72 check groups of static
+                                 VB/XAML/project/resw/theme-key/flavour/
+                                 import/name-legality/doc-comment checks
+tools/keyword-probe/          ← one `Dim <word> As Integer` per candidate,
+tools/keyword-probe.cmd          compiled by the real vbc, so group 17's list is
+                                 measured rather than quoted. Batched, with a
+                                 sentinel per batch: vbc 12 stops after ~100
+                                 errors with no message at all
 tools/check-polyfill.mjs      ← ES5 validity of the shim
 tools/wp81-theme-keys.sh      ← regenerates the phone's 523 theme-resource keys
                                  (guest-side) into tools/wp81-theme-keys.txt,
