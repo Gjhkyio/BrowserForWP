@@ -354,4 +354,35 @@
   <data name="RemoteUseServer" xml:space="preserve">
     <value>Disegna le pagine sul server</value>
   </data>
+  <!-- La barra dei tasti: quelli che una tastiera del telefono non può mandare -->
+  <data name="RemoteKeys" xml:space="preserve">
+    <value>Tasti</value>
+  </data>
+  <data name="KeyTab" xml:space="preserve">
+    <value>Tab</value>
+  </data>
+  <data name="KeyEnter" xml:space="preserve">
+    <value>Invio</value>
+  </data>
+  <data name="KeyEscape" xml:space="preserve">
+    <value>Esc</value>
+  </data>
+  <data name="KeyBackspace" xml:space="preserve">
+    <value>Backspace</value>
+  </data>
+  <data name="KeyLeft" xml:space="preserve">
+    <value>&#x2190;</value>
+  </data>
+  <data name="KeyUp" xml:space="preserve">
+    <value>&#x2191;</value>
+  </data>
+  <data name="KeyDown" xml:space="preserve">
+    <value>&#x2193;</value>
+  </data>
+  <data name="KeyRight" xml:space="preserve">
+    <value>&#x2192;</value>
+  </data>
+  <data name="KeyBarClose" xml:space="preserve">
+    <value>Chiudi</value>
+  </data>
 </root>

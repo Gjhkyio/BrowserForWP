@@ -114,6 +114,18 @@ Namespace Engine
             _screen = New RemoteScreen(AddressOf OnInput, AddressOf OnScroll, AddressOf OnKey,
                                        MeasurePixelRatio())
             _host.Children.Add(DirectCast(_screen.Source, Windows.UI.Xaml.UIElement))
+
+            ' The screen is built ONCE, here, and a rotation never rebuilds it: the
+            ' hidden field that owns the soft keyboard is a child of that canvas, and
+            ' a field rebuilt when the phone turns loses the word the person was
+            ' halfway through typing. tools/proto/remote-input.mjs asserts the count.
+            Try
+                AddHandler Windows.UI.Xaml.Window.Current.SizeChanged, AddressOf OnWindowSizeChanged
+                ApplyViewport()
+            Catch
+                ' A shell with no window yet keeps the viewport the first navigation
+                ' gives it; ApplyViewport runs again there.
+            End Try
         End Sub
 
         Public ReadOnly Property Capabilities As EngineCapabilities Implements IBrowserEngine.Capabilities
@@ -163,7 +175,7 @@ Namespace Engine
 
         Private Async Sub NavigateCore(url As String)
             Try
-                RefreshViewport()
+                ApplyViewport()
 
                 ' The toggle is the disclosure, and this is where it is honoured.
                 ' Choosing this engine in the picker is not the same statement as
@@ -340,7 +352,7 @@ Namespace Engine
 
             Dim frame As RemoteFramePayload = RemoteMessages.DecodeFramePayload(payload)
             Dim isFull As Boolean = (frame.Flags And RemoteFramePayload.FlagFull) <> 0
-            Await _screen.ShowFrameAsync(frame.Tiles, isFull, _viewportWidth, _viewportHeight)
+            Await _screen.ShowFrameAsync(frame.Tiles, isFull)
 
             _ackedFrame = sequence
             Await _channel.SendAsync(RemoteMessageType.Ack, RemoteMessages.EncodeAck(sequence))
@@ -365,6 +377,22 @@ Namespace Engine
             ' flick cannot wrap into a scroll the other way.
             Send(RemoteMessageType.Scroll,
                  RemoteMessages.EncodeScroll(x, y, CShort(deltaX), CShort(deltaY)))
+        End Sub
+
+        ''' <summary>
+        ''' Presses a named key on the page, for the shell's keys bar. The names are
+        ''' Playwright's, and a name the server does not recognise is a key that does
+        ''' nothing rather than a failure -- which is why the eight this shell offers
+        ''' are asserted against a list in tools/proto/remote-input.mjs instead of
+        ''' being typed into the XAML.
+        '''
+        ''' The modifier byte goes as 0, and not because it is unavailable: the
+        ''' server reads { key, text } and drops { modifiers }, so sending one would
+        ''' be a byte that does nothing. Deferred item 18.
+        ''' </summary>
+        Public Sub TypeKey(keyName As String)
+            If String.IsNullOrEmpty(keyName) Then Return
+            Send(RemoteMessageType.Key, RemoteMessages.EncodeKey(keyName, 0, String.Empty))
         End Sub
 
         Private Sub OnKey(keyName As String, modifiers As Integer, text As String)
@@ -451,11 +479,38 @@ Namespace Engine
             Return snapshot
         End Function
 
-        Private Sub RefreshViewport()
+        Private Sub ApplyViewport()
             Dim bounds As Windows.Foundation.Rect = Windows.UI.Xaml.Window.Current.Bounds
             _viewportWidth = Math.Max(1, CInt(bounds.Width))
             _viewportHeight = Math.Max(1, CInt(bounds.Height))
             _devicePixelRatio = MeasurePixelRatio()
+            _screen.SetViewport(_viewportWidth, _viewportHeight, _devicePixelRatio)
+        End Sub
+
+        ''' <summary>
+        ''' The phone turned. Two numbers have to move together, and this is the only
+        ''' place both do: the viewport the server draws at, and the viewport a finger
+        ''' is mapped through. Move only the second and every tap is offset by the
+        ''' difference; move only the first and the picture is letterboxed against a
+        ''' mapping that no longer describes it. A picture that looks right with taps
+        ''' that land in the wrong place is the failure this method exists to stop.
+        ''' </summary>
+        ''' <remarks>
+        ''' The event is on the Window (Windows.UI.Xaml) and its arguments are in
+        ''' Windows.UI.Core -- a split that cost the first build of this method BC30002
+        ''' on Windows.UI.Xaml.WindowSizeChangedEventArgs, which does not exist. The
+        ''' compiler is the only thing that would have said so: no checker here reads
+        ''' a WinRT type name.
+        ''' </remarks>
+        Private Sub OnWindowSizeChanged(sender As Object, e As Windows.UI.Core.WindowSizeChangedEventArgs)
+            If _channel Is Nothing OrElse Not _channel.IsOpen Then Return
+
+            Dim hadKeyboard As Boolean = _screen.HasKeyboardFocus
+            ApplyViewport()
+            If hadKeyboard Then _screen.FocusKeyboard()
+
+            Send(RemoteMessageType.Resize,
+                 RemoteMessages.EncodeResize(_viewportWidth, _viewportHeight, _devicePixelRatio))
         End Sub
 
         ''' <summary>

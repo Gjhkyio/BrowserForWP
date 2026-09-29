@@ -207,6 +207,16 @@ Public NotInheritable Class MainPage
         PinRemoveButton.Content = Localizer.Get("PinRemove")
         ParsePageButton.Content = Localizer.Get("ParseThisPage")
         IeModeButton.Content = Localizer.Get("IeModeCheck")
+        RemoteKeysButton.Content = Localizer.Get("RemoteKeys")
+        KeyTabButton.Content = Localizer.Get("KeyTab")
+        KeyEnterButton.Content = Localizer.Get("KeyEnter")
+        KeyEscapeButton.Content = Localizer.Get("KeyEscape")
+        KeyBackspaceButton.Content = Localizer.Get("KeyBackspace")
+        KeyLeftButton.Content = Localizer.Get("KeyLeft")
+        KeyUpButton.Content = Localizer.Get("KeyUp")
+        KeyDownButton.Content = Localizer.Get("KeyDown")
+        KeyRightButton.Content = Localizer.Get("KeyRight")
+        KeyBarCloseButton.Content = Localizer.Get("KeyBarClose")
 
         DesktopToggle.IsChecked = _session.DesktopMode
         PrivateModeToggle.IsChecked = _session.PrivateMode
@@ -1185,7 +1195,69 @@ Public NotInheritable Class MainPage
         ReadingButton.IsEnabled = localScripting
         NightModeToggle.IsEnabled = localScripting
 
+        ' And the keys bar belongs to the OTHER engine: it exists because the server
+        ' is the only thing that can press Tab, Escape or an arrow on this page.
+        Dim remoteEngine As Boolean = TypeOf _engine Is BrowserForWP.Engine.RemoteEngine
+        RemoteKeysButton.IsEnabled = remoteEngine
+        If Not remoteEngine Then RemoteKeysBar.Visibility = Visibility.Collapsed
+
         EngineStatusText.Text = Localizer.Get(EngineChoice.Explain(_appSettings.EngineSetting, False, 0))
+    End Sub
+
+    ''' <summary>
+    ''' The keys bar: the keys a phone's soft keyboard has no way to send. Every
+    ''' button goes through one helper, so the eight key names live in one list that
+    ''' tools/proto/remote-input.mjs can read and check against what the server can
+    ''' press.
+    ''' </summary>
+    Private Sub SendRemoteKey(keyName As String)
+        Dim remote As BrowserForWP.Engine.RemoteEngine = TryCast(_engine, BrowserForWP.Engine.RemoteEngine)
+        If remote Is Nothing Then Return
+        remote.TypeKey(keyName)
+    End Sub
+
+    Private Sub RemoteKeysButton_Click(sender As Object, e As RoutedEventArgs)
+        If RemoteKeysBar.Visibility = Visibility.Visible Then
+            RemoteKeysBar.Visibility = Visibility.Collapsed
+        Else
+            RemoteKeysBar.Visibility = Visibility.Visible
+        End If
+    End Sub
+
+    Private Sub KeyBarCloseButton_Click(sender As Object, e As RoutedEventArgs)
+        RemoteKeysBar.Visibility = Visibility.Collapsed
+    End Sub
+
+    Private Sub KeyTabButton_Click(sender As Object, e As RoutedEventArgs)
+        SendRemoteKey("Tab")
+    End Sub
+
+    Private Sub KeyEnterButton_Click(sender As Object, e As RoutedEventArgs)
+        SendRemoteKey("Enter")
+    End Sub
+
+    Private Sub KeyEscapeButton_Click(sender As Object, e As RoutedEventArgs)
+        SendRemoteKey("Escape")
+    End Sub
+
+    Private Sub KeyBackspaceButton_Click(sender As Object, e As RoutedEventArgs)
+        SendRemoteKey("Backspace")
+    End Sub
+
+    Private Sub KeyLeftButton_Click(sender As Object, e As RoutedEventArgs)
+        SendRemoteKey("ArrowLeft")
+    End Sub
+
+    Private Sub KeyUpButton_Click(sender As Object, e As RoutedEventArgs)
+        SendRemoteKey("ArrowUp")
+    End Sub
+
+    Private Sub KeyDownButton_Click(sender As Object, e As RoutedEventArgs)
+        SendRemoteKey("ArrowDown")
+    End Sub
+
+    Private Sub KeyRightButton_Click(sender As Object, e As RoutedEventArgs)
+        SendRemoteKey("ArrowRight")
     End Sub
 
     ''' <summary>

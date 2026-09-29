@@ -233,6 +233,7 @@ verified if you skipped its command.
 | `RemoteServers.vb`, the settings fields it reads, or anything that chooses WHERE to render | `node tools/proto/remote-servers.mjs` | `19/19 checks passed`. The old `textmeasure.mjs` / `boxlayout.mjs` rows were deleted with the on-device renderer |
 | `EngineChoice.vb`, or anything that selects an engine or falls back automatically | `node tools/proto/engine-choice.mjs` | `23/23 checks passed` |
 | Any claim about the remote engine's wire format, header, frame splitter or sealed frames | `node tools/proto/remote-protocol.mjs` | `91/91 checks passed`, byte-for-byte against the vectors the SERVER's own code emitted |
+| The remote input path: the hidden keyboard field, the write gate, a rotation, the keys bar | `node tools/proto/remote-input.mjs --probe` | `7/7 remote-input checks passed` AND `Every planted defect was refused`. The `--probe` half is not optional: it plants each defect the checks exist for, and a mutation that does not fail its check means that check cannot see what it is named after |
 | `CompatibilityProbe.vb` / any probe verdict | `node tools/proto/probe-verdict.mjs` | `9/9 checks passed` |
 | Any claim about re-configuring Trident | `node tools/proto/ie-adapt.mjs` | `9/9 checks passed` |
 | Any claim about leaving the AppContainer, or about getting JIT memory | `node tools/proto/sandbox-escape.mjs` | `15/15 checks passed` |
@@ -320,7 +321,9 @@ tools/proto/engine-choice.mjs ← which engine renders, and when it may fall bac
 BrowserForWP/Engine/RemoteEngine.vb ← the remote engine: walks the two servers,
                                  owns the connection, and raises Navigated/Audio
 BrowserForWP/Engine/RemoteChannel.vb ← one connection: handshake, sealed frames,
-                                 read loop, frame acknowledgement
+                                 read loop, frame acknowledgement, and the
+                                 SemaphoreSlim gate that serialises every write
+                                 (seal AND write: two seals can share a sequence)
 BrowserForWP/Rendering/RemoteScreen.vb ← the Canvas of JPEG tiles, plus tap,
                                  scroll and soft-keyboard forwarding. NO handset
                                  has ever run one line of it (see the empty

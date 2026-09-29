@@ -61,6 +61,41 @@
 
             <Grid Grid.Row="2">
                 <Border x:Name="ContentHost"/>
+                <!--
+                  The keys a soft keyboard cannot send. On a phone the system
+                  keyboard is a separate process with its own key set: it has
+                  letters, Enter and Backspace, and no Tab, no Escape and no arrow
+                  keys at all. A form with two fields is therefore unusable on this
+                  engine without this bar, which is why it is part of the input
+                  path and not a nicety.
+
+                  Shift+Tab is deliberately NOT here: the protocol carries a
+                  modifier byte, the server's key handler ignores it, and a button
+                  that presses Tab while claiming Shift would be a lie in the UI.
+                -->
+                <Border x:Name="RemoteKeysBar" Visibility="Collapsed"
+                        VerticalAlignment="Bottom" Margin="8"
+                        Background="{ThemeResource ApplicationPageBackgroundThemeBrush}"
+                        CornerRadius="4" Padding="6">
+                    <!-- Scrollable for the same reason the toolbar is: nine buttons
+                         and a label each do not fit a 480-pixel screen, and a bar
+                         whose last button cannot be reached is a bar with eight. -->
+                    <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                                  VerticalScrollBarVisibility="Disabled">
+                    <StackPanel Orientation="Horizontal">
+                        <Button x:Name="KeyTabButton" Click="KeyTabButton_Click" Margin="0,0,4,0"/>
+                        <Button x:Name="KeyEnterButton" Click="KeyEnterButton_Click" Margin="0,0,4,0"/>
+                        <Button x:Name="KeyEscapeButton" Click="KeyEscapeButton_Click" Margin="0,0,4,0"/>
+                        <Button x:Name="KeyBackspaceButton" Click="KeyBackspaceButton_Click" Margin="0,0,4,0"/>
+                        <Button x:Name="KeyLeftButton" Click="KeyLeftButton_Click" Margin="0,0,4,0"/>
+                        <Button x:Name="KeyUpButton" Click="KeyUpButton_Click" Margin="0,0,4,0"/>
+                        <Button x:Name="KeyDownButton" Click="KeyDownButton_Click" Margin="0,0,4,0"/>
+                        <Button x:Name="KeyRightButton" Click="KeyRightButton_Click" Margin="0,0,4,0"/>
+                        <Button x:Name="KeyBarCloseButton" Click="KeyBarCloseButton_Click"/>
+                    </StackPanel>
+                    </ScrollViewer>
+                </Border>
+
                 <Border x:Name="FindBar" Visibility="Collapsed"
                         VerticalAlignment="Top" Margin="8"
                         Background="{ThemeResource ApplicationPageBackgroundThemeBrush}"
@@ -97,9 +132,9 @@
                     <Button x:Name="ReloadButton" Click="ReloadButton_Click" Margin="0,0,6,0"/>
                     <Button x:Name="StopButton" Click="StopButton_Click" Margin="0,0,6,0"/>
                     <Button x:Name="TabsButton" Click="TabsButton_Click" Margin="0,0,6,0"/>
-                    <Button x:Name="FindButton" Click="FindButton_Click" Margin="0,0,6,0"/>
-                    <Button x:Name="ReadingButton" Click="ReadingButton_Click" Margin="0,0,6,0"/>
-                    <Button x:Name="ShareButton" Click="ShareButton_Click" Margin="0,0,6,0"/>
+                    <Button x:Name="FindButton" Click="FindButton_Click" Margin="0,0,6,0"/>                        <Button x:Name="ReadingButton" Click="ReadingButton_Click" Margin="0,0,6,0"/>
+                        <Button x:Name="RemoteKeysButton" Click="RemoteKeysButton_Click" Margin="0,0,6,0"/>
+                        <Button x:Name="ShareButton" Click="ShareButton_Click" Margin="0,0,6,0"/>
                     <Button x:Name="SecurityDetailsButton" Click="SecurityDetailsButton_Click" Margin="0,0,6,0"/>
                     <Button x:Name="SettingsButton" Click="SettingsButton_Click"/>
                 </StackPanel>

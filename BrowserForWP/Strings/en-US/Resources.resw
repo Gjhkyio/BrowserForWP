@@ -354,4 +354,35 @@
   <data name="RemoteUseServer" xml:space="preserve">
     <value>Draw pages on the server</value>
   </data>
+  <!-- The keys bar: the keys a phone keyboard cannot send (see MainPage.xaml) -->
+  <data name="RemoteKeys" xml:space="preserve">
+    <value>Keys</value>
+  </data>
+  <data name="KeyTab" xml:space="preserve">
+    <value>Tab</value>
+  </data>
+  <data name="KeyEnter" xml:space="preserve">
+    <value>Enter</value>
+  </data>
+  <data name="KeyEscape" xml:space="preserve">
+    <value>Esc</value>
+  </data>
+  <data name="KeyBackspace" xml:space="preserve">
+    <value>Backspace</value>
+  </data>
+  <data name="KeyLeft" xml:space="preserve">
+    <value>&#x2190;</value>
+  </data>
+  <data name="KeyUp" xml:space="preserve">
+    <value>&#x2191;</value>
+  </data>
+  <data name="KeyDown" xml:space="preserve">
+    <value>&#x2193;</value>
+  </data>
+  <data name="KeyRight" xml:space="preserve">
+    <value>&#x2192;</value>
+  </data>
+  <data name="KeyBarClose" xml:space="preserve">
+    <value>Close</value>
+  </data>
 </root>

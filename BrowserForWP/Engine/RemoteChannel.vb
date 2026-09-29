@@ -34,6 +34,24 @@ Namespace Engine
     Public NotInheritable Class RemoteChannel
 
         Private ReadOnly _reader As New RemoteFrameReader(131072)
+
+        ''' <summary>
+        ''' One writer at a time, and it covers the SEAL as well as the write.
+        '''
+        ''' Both halves matter and neither is obvious. Sealing is what allocates the
+        ''' sequence number, so two callers inside Seal at once can read the same
+        ''' number and encrypt two different records with the same nonce: not a
+        ''' garbled screen but a broken channel, and one the server answers by closing
+        ''' it. And Tls13Client.WriteAsync does not serialise its callers -- two
+        ''' concurrent writes interleave their records on one socket.
+        '''
+        ''' This went unnoticed until the keyboard arrived, because until then every
+        ''' message came from one place at a time. Typing is many small messages from
+        ''' two: the UI thread sends keystrokes while the read loop sends the frame
+        ''' acknowledgement for the frame that shows them.
+        ''' </summary>
+        Private ReadOnly _writeGate As New System.Threading.SemaphoreSlim(1, 1)
+
         Private _tls As Tls13Client
         Private _channel As SealedChannel
         Private _helloAck As RemoteHelloAck
@@ -221,9 +239,21 @@ Namespace Engine
         Public Async Function SendAsync(messageType As Byte, payload As Byte()) As Task
             If _channel Is Nothing Then Throw New RemoteChannelException("not connected")
             If _closed Then Throw New RemoteChannelException("the connection is closed")
-            Dim frame As Byte() = _channel.Seal(messageType, payload)
-            If _tls Is Nothing Then Throw New RemoteChannelException("not connected")
-            Await _tls.WriteAsync(frame)
+
+            ' Both are read BEFORE the gate, so a Disconnect that lands while this
+            ' call is queued cannot turn a valid send into a null dereference on the
+            ' other side of the wait.
+            Dim channel As SealedChannel = _channel
+            Dim tls As Tls13Client = _tls
+            If tls Is Nothing Then Throw New RemoteChannelException("not connected")
+
+            Await _writeGate.WaitAsync()
+            Try
+                Dim frame As Byte() = channel.Seal(messageType, payload)
+                Await tls.WriteAsync(frame)
+            Finally
+                _writeGate.Release()
+            End Try
         End Function
 
         ''' <summary>
@@ -237,7 +267,19 @@ Namespace Engine
             Dim frame(header.Length + payload.Length - 1) As Byte
             Array.Copy(header, 0, frame, 0, header.Length)
             Array.Copy(payload, 0, frame, header.Length, payload.Length)
-            Await _tls.WriteAsync(frame)
+
+            Dim tls As Tls13Client = _tls
+            If tls Is Nothing Then Throw New RemoteChannelException("not connected")
+
+            ' The same gate as SendAsync. The handshake is the one write that is not
+            ' sealed, and it is still a write: taking the gate here is what makes "a
+            ' send is serialised" a property of this class rather than of one method.
+            Await _writeGate.WaitAsync()
+            Try
+                Await tls.WriteAsync(frame)
+            Finally
+                _writeGate.Release()
+            End Try
         End Function
 
         ''' <summary>

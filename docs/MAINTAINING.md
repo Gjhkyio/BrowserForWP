@@ -76,6 +76,15 @@ node tools/proto/remote-servers.mjs
 # is caught here rather than as a garbled screen on a phone.
 node tools/proto/remote-protocol.mjs
 
+# The input path: the hidden field that owns the soft keyboard, the gate that
+# serialises writes to the stream, the rotation that must move the server's
+# viewport AND this device's mapping, and the key names the keys bar offers.
+# Must print "7/7 remote-input checks passed". `--probe` plants each defect it
+# exists to catch and requires the matching check to refuse it: a check nobody
+# has seen fail is decoration, and this repository has shipped decoration twice.
+node tools/proto/remote-input.mjs
+node tools/proto/remote-input.mjs --probe
+
 # The engine-choice rule: what the automatic fallback decides, and the row that
 # matters most — an absent measurement is never grounds for switching engines.
 # Must print "23/23 checks passed".
@@ -859,10 +868,11 @@ the interface, so the shell wires whichever engine it built and therefore knows
     switching tabs navigates the same session and the page's own state (scroll
     position, a form half filled) is gone. `BrowserSession` keeps URLs, not
     documents.
-14. **A rotation does not resize the remote viewport.** The viewport is read once
-    per navigation (`RefreshViewport`), so turning the phone leaves the server
-    drawing at the old width until the next navigation. The system WebView handles
-    this itself, which is why the gap is only visible on this engine.
+14. **CLOSED in Round 11 — a rotation resizes the remote viewport.**
+    `Window.Current.SizeChanged` re-measures, re-maps the screen and sends
+    `RESIZE`, and `tools/proto/remote-input.mjs` asserts all three parts. The item
+    is kept rather than deleted so that a reader who remembers the gap finds it
+    closed instead of gone.
 15. **The remote engine has never spoken to a server.** No part of the handshake,
     the frame loop, the tile decode, the 1/dpr scale, the tap and scroll mapping,
     the soft-keyboard proxy or the audio path has run against a live session.
@@ -873,6 +883,22 @@ the interface, so the shell wires whichever engine it built and therefore knows
     choose; the engine stays off until an address and a token are configured. One
     line in `AppSettings` is all a default would need, and that line is not written
     on purpose.
+17. **The page never tells the phone that a field took focus.** Nothing in the 23
+    message types says "focus moved", so the client cannot know whether a tap
+    landed on a text box, and **the soft keyboard therefore comes up on every
+    tap** — including on a link and on empty space. Fixing it is a new message in
+    this protocol, in `Docker-BrowserForWP` and in the vectors: worth doing, and
+    not a change to smuggle into the client. See the plan
+    `docs/superpowers/plans/2026-09-29-remote-input-path.md`.
+18. **The `KEY` message carries a modifier byte the server ignores.**
+    `browser.js` reads `{ key, text }` and drops `{ modifiers }`, so Shift+Tab and
+    Control+Enter are not expressible. The shell offers neither, and a button that
+    sent a modifier while pressing an unmodified key would be a lie in the UI.
+19. **The keys bar itself has never been seen.** It is nine buttons and a
+    scrollable strip in `MainPage.xaml`, wired by
+    `tools/proto/remote-input.mjs` to names the server can press and to labels in
+    both languages — and no handset has drawn it. It is one more row of § "The
+    remote engine, verified by hand" that is blank.
 
 ### Error taxonomy
 
@@ -1280,8 +1306,66 @@ hand-verification table in this file begins at the screen it never drew.
 `core-logic.mjs` 66 assertions; `engine-choice.mjs` 23/23; `boxtree.mjs` 48/48;
 `check-vb.mjs` 16 groups over 17 categories, 0 finding(s).
 **Not verified:** everything that needs a handset or a server — see § "The remote
-engine, verified by hand", whose ten rows are blank rather than marked as passing,
+engine, verified by hand", where every row is blank rather than marked as passing,
 and deferred items 15 and 16.
+
+### Round 11 — the keyboard, and the write that had to be serialised
+
+The input path, end to end: a tap focuses the hidden field (and therefore raises
+the soft keyboard), what the keyboard types crosses as `TEXT`, Enter and
+Backspace cross as `KEY`, the page redraws and the picture shows the text. Plus the
+keys a phone keyboard cannot send at all — Tab, Escape, Backspace and the four
+arrows — as a scrollable bar above the page, and a rotation that moves the
+server's viewport and this device's finger mapping together.
+
+**The half nobody can see: the writes were not serialised.** `RemoteEngine.Send`
+is fire-and-forget and `Tls13Client.WriteAsync` does not serialise its callers, so
+two messages could be in `SealedChannel.Seal` at once — reading the same sequence
+number and encrypting two records with the same nonce, which the server answers by
+closing the channel. Nothing had noticed because nothing typed: until this round,
+every message came from one place at a time, and typing is many small messages
+from two, the UI thread and the frame-acknowledging read loop.
+`RemoteChannel` now takes a `SemaphoreSlim` around **seal and write** in both send
+paths, and `tools/proto/remote-input.mjs` asserts it is there and inside a
+`Finally`.
+
+**Why tap-then-type is not a race, measured rather than assumed.** `src/server.js`
+chains the messages of a connection (`queue = queue.then(() => session.onFrame(frame))`)
+and `Session.onFrame` awaits `_dispatch`, so the `TAP` that focuses a field has
+finished before the `TEXT` that follows it is handled. On the client side the same
+order is what the gate above protects.
+
+**What this round does NOT do, and says so.** The protocol has no message meaning
+"focus moved", so the phone cannot know whether a tap landed on a text box: **the
+keyboard comes up on every tap**, including on a link. Mirroring the page's focused
+field needs a new message type in both repositories (deferred item 17). The `KEY`
+message's modifier byte is carried and ignored by the server, so Shift+Tab is not
+offered rather than offered and wrong (item 18).
+
+**Two defects, one from the compiler and one from the referee's own negative
+control.**
+
+- `Window.SizeChanged` takes its arguments from `Windows.UI.Core` and its event
+  from `Windows.UI.Xaml`; the first build of the handler said
+  `Windows.UI.Xaml.WindowSizeChangedEventArgs` and got BC30002 — a type name no
+  checker here reads.
+- The rotation check in `remote-input.mjs` was wrong twice before it was right: it
+demanded `_screen.SetViewport` inside the handler, when the design funnels both
+numbers through `ApplyViewport`, and its planted defect replaced the FIRST
+occurrence of a button name, so the name survived later in the file and the
+mutation planted nothing at all. The `--probe` run is what exposed it: **a
+mutation that does not fail its check is a check that cannot see what it is named
+after.**
+
+**Verified:** `remote-input.mjs` 7/7 with all 7 planted defects refused;
+`remote-protocol.mjs` 91/91; `remote-servers.mjs` 19/19; `engine-choice.mjs` 23/23;
+`core-logic.mjs` 66 assertions; `boxtree.mjs` 48/48; `check-vb.mjs` 16 groups over
+17 categories, 0 finding(s); six configurations `BUILD_EXIT=0` with only the two
+deliberate `BC40000` warnings.
+**Not verified:** the whole of it that needs a soft keyboard. That a tap raises
+the system keyboard, that a keystroke arrives after it, that the keys bar's buttons
+press what they say, and that a rotation keeps the keyboard up are all unrun — see
+the blank rows in § "The remote engine, verified by hand".
 
 ## The loop
 
@@ -1314,6 +1398,7 @@ What is and is not covered:
 | `tests/BrowserForWP.Crypto.Tests/` (`Vectors.generated.vb` + `VectorsSmokeTests.vb`) | Generated VB constants from those same vectors, plus length/shape checks. | **Compiled by the guest build; never executed.** |
 | `tests/BrowserForWP.Core.Tests/CoreLogicTests.vb` | Address normalisation, tab state, session/UA, settings, history, favourites, pin normalisation, hostname wildcards, language matching. | **Compiled by the guest build; never executed.** |
 | `tools/proto/core-logic.mjs` | A transliteration of `CoreLogicTests.vb`. 66 assertions, exit 1 on failure. | `node`, on any machine. **This is what actually runs those assertions.** |
+| `tools/proto/remote-input.mjs` | The remote input path as source contracts: one hidden `TextBox` built once, the `SemaphoreSlim` gate over every write to the stream, the rotation that moves both viewports and sends `RESIZE`, the eight key names the keys bar offers, and that every label has a key in both `.resw` files. Seven checks, plus `--probe`, which plants each defect and requires its check to refuse it. | `node`, on any machine. |
 | `tools/proto/remote-protocol.mjs` | The render protocol's wire format: header, every encoder and decoder, the frame splitter, and the AEAD seal both ways, checked byte-for-byte against `protocol/vectors.json` — which the SERVER's own code produced. The only statement of the protocol that neither implementation wrote. 91 checks. | `node`, on any machine. |
 | `tools/proto/remote-servers.mjs` | `RemoteServers.vb`: url normalisation, the primary/secondary order, duplicate collapsing, and the source contract that Core holds resource keys and not prose. | `node`, on any machine. |
 | `tools/proto/engine-choice.mjs` | The `EngineChoice` decision table, plus the source contract around it: the constants by name, and the reasons as resource keys rather than sentences. | `node`, on any machine. |
@@ -1360,11 +1445,14 @@ Ran it: 2026-09-29. Device: none available. Server: none reachable.
 | Press the phone's back button | The shell's back goes to the previous page. | |
 | Stop the server, then navigate | The secondary is used, and the status line says so. | |
 | Play a page with sound | Sound, if `WITH_AUDIO=1` and PulseAudio are running. | |
+| Turn the phone while a field has focus | The keyboard stays up, the picture fills the new shape, and a tap still lands where the finger is. | |
+| Press Tab in the keys bar | The next field on the page takes focus, and the frame shows it. | |
 
 **What this round does verify**, and with what:
 
 | Claim | Evidence |
 | --- | --- |
+| The input path holds its contracts (one field, gated writes, rotation, key names) | `node tools/proto/remote-input.mjs` → `7/7`, and `--probe` refuses all 7 planted defects |
 | The wire format reproduces the server's own bytes | `node tools/proto/remote-protocol.mjs` → `91/91 checks passed` |
 | The primary/secondary rule and url normalisation hold | `node tools/proto/remote-servers.mjs` → `19/19`; `node tools/proto/core-logic.mjs` → `66 assertions, 0 failure(s)` |
 | The engine decision table is unchanged | `node tools/proto/engine-choice.mjs` → `23/23` |

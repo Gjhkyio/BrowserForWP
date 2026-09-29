@@ -116,6 +116,13 @@ somebody else's machine, and it changes what the browser IS:
 - The device holds no page. No script runs locally, so Find, Reading mode and
   night mode are Trident features and are disabled on this engine rather than
   pretending to work.
+- **The input path is split down the middle, and which half is whose matters.**
+  The keyboard is the phone's: a 1x1 transparent `TextBox` owns the soft keyboard
+  and empties itself into `TEXT` and `KEY` messages. The field is the server's:
+  the phone cannot see a caret, cannot prefill, and cannot know whether a tap
+  landed on an input at all, so the keyboard comes up on every tap and the keys a
+  soft keyboard has no way to send (Tab, Escape, the arrows) are a bar in the
+  shell. Nothing here mirrors the page's field, and nothing pretends to.
 - The network becomes load-bearing in a way it was not: a page is only as fast as
   the link, and a dropped connection loses the page.
 - On-device rendering is NOT deleted because it is worse. It is deleted because

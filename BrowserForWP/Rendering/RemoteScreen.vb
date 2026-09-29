@@ -60,7 +60,8 @@ Namespace Rendering
         ''' <summary>A Playwright key name, its modifiers, and text to insert instead.</summary>
         Private ReadOnly _raiseKey As Action(Of String, Integer, String)
 
-        Private ReadOnly _pixelRatio As Double
+        ' Not ReadOnly: a rotation changes it, and the scale has to follow.
+        Private _pixelRatio As Double
         Private _viewportWidth As Integer
         Private _viewportHeight As Integer
 
@@ -75,10 +76,8 @@ Namespace Rendering
             _raiseInput = raiseInput
             _raiseScroll = raiseScroll
             _raiseKey = raiseKey
-            _pixelRatio = If(devicePixelRatio < 1, 1.0, CDbl(devicePixelRatio))
+            SetScale(devicePixelRatio)
 
-            _transform.ScaleX = 1.0 / _pixelRatio
-            _transform.ScaleY = 1.0 / _pixelRatio
             _canvas.RenderTransform = _transform
             _canvas.Background = New SolidColorBrush(Windows.UI.Colors.White)
             _canvas.IsTapEnabled = True
@@ -100,17 +99,61 @@ Namespace Rendering
         End Property
 
         ''' <summary>
+        ''' The viewport the server was asked for, in CSS pixels, and the ratio its
+        ''' frames come back at. Called on connect and again after a rotation.
+        '''
+        ''' A FRAME DOES NOT CARRY THIS. The tiles are rectangles in FRAME pixels
+        ''' (CSS x ratio) and nothing in the message says how wide the viewport was,
+        ''' so a screen that inferred it from a tile would be inferring from the
+        ''' picture. The engine knows it, and this is where it is said -- once.
+        ''' </summary>
+        Public Sub SetViewport(width As Integer, height As Integer, devicePixelRatio As Integer)
+            _viewportWidth = Math.Max(1, width)
+            _viewportHeight = Math.Max(1, height)
+            SetScale(devicePixelRatio)
+        End Sub
+
+        ''' <summary>True while the hidden field owns the soft keyboard.</summary>
+        Public ReadOnly Property HasKeyboardFocus As Boolean
+            Get
+                Return _ime.FocusState <> FocusState.Unfocused
+            End Get
+        End Property
+
+        ''' <summary>
+        ''' Raises the soft keyboard, or leaves it up. Called after a rotation,
+        ''' because a re-arranged tree can drop focus and a keyboard that closes
+        ''' itself when the phone turns is a keyboard the person did not dismiss.
+        ''' </summary>
+        Public Sub FocusKeyboard()
+            Try
+                _ime.Focus(FocusState.Programmatic)
+            Catch
+                ' A phone that refuses focus still gets the tap that asked for it.
+            End Try
+        End Sub
+
+        ''' <summary>
+        ''' The scale that turns frame pixels into layout pixels. A ratio of 2 means
+        ''' the server draws twice as many pixels as this screen has, so the canvas
+        ''' is scaled by a half and the picture lands at the size the page has.
+        ''' </summary>
+        Private Sub SetScale(devicePixelRatio As Integer)
+            Dim ratio As Double = If(devicePixelRatio < 1, 1.0, CDbl(devicePixelRatio))
+            _pixelRatio = ratio
+            _transform.ScaleX = 1.0 / ratio
+            _transform.ScaleY = 1.0 / ratio
+        End Sub
+
+        ''' <summary>
         ''' Draws the tiles. A rectangle that has been seen before gets its Image
         ''' reused, which is what keeps a twenty-frame-per-second page from
         ''' allocating twenty elements a second. A frame flagged as complete also
         ''' drops the images of tiles it does not mention, because a full frame is a
         ''' statement about the whole picture and not about its own rectangle list.
         ''' </summary>
-        Public Async Function ShowFrameAsync(tiles As IList(Of RemoteFrameTile), full As Boolean,
-                                             width As Integer, height As Integer) As Task
+        Public Async Function ShowFrameAsync(tiles As IList(Of RemoteFrameTile), full As Boolean) As Task
             If tiles Is Nothing Then Return
-            _viewportWidth = width
-            _viewportHeight = height
 
             Dim live As New HashSet(Of Integer)()
             For index As Integer = 0 To tiles.Count - 1
