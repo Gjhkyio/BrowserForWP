@@ -132,6 +132,32 @@ authoritative values are the VS2013 templates under
 `Common7\IDE\ProjectTemplates\VisualBasic\` in the guest — compare against those
 rather than editing a GUID until a warning disappears (see Round 6).
 
+**Second-and-thirty-one-thirty-seconds — `BrowserForWP.sln` names a project
+*factory*, not a flavour, and both rules are measured.** Every `Project` line in
+the solution must carry `{F184B08F-C81C-45F6-A57F-5ABD9991F28F}`, the plain VB
+GUID — the only project factory registered in this VS2013 installation — and its
+path must use `/`, not `\`. The flavour GUID of the paragraph above belongs in the
+`.vbproj` and nowhere else. Round 6 concluded the opposite for the `.sln` and was
+wrong: it read the registry (which shows which factories *exist*) and inferred the
+loader ignores the field, when the loader instead finds no factory and loads
+nothing at all. Measured, one field apart, `devenv.com BrowserForWP.sln /build
+"Debug|ARM"`: `{76F1466A-...}` gives `Build: 0 succeeded or up-to-date, 0 failed,
+0 skipped` — not one project loaded — and `{F184B08F-...}` gives
+`Build: 7 succeeded, 0 failed`. `MSBuild` reads none of it, so all six
+configurations stay green either way.
+
+**Second-and-sixty-three-sixty-fourths — never write the name of the flavour
+property inside a comment in a `.vbproj`.** The IDE's Windows Phone project
+factory locates it by scanning the file as **text**, not by parsing it as XML, so
+the first occurrence of the name wins. Put one in a comment ahead of the element —
+as `BrowserForWP.Crypto` did — and the flavour reads as empty, and the IDE refuses
+the whole project with `The application for the project is not installed.`: no
+diagnostic code, no build able to see it. Say "the flavour property" in prose.
+Measured by bisection in Round 12: a byte-identical copy of the project still
+refuses, the same file with its comments removed loads, removing one comment block
+restores it, and adding one mention to a leading comment of a file that loaded a
+moment earlier breaks it again.
+
 **Third — never edit `X25519.vb` or `BrowserForWP.Net/Tls13/` by hand.** Both
 are transliterations of executable prototypes, and those prototypes are the only
 real checks available off-Windows. Change the prototype first, watch it pass, then
@@ -245,7 +271,8 @@ verified if you skipped its command.
 | A manifest capability, or any use of JIT / process creation / full trust | `node tools/check-vb.mjs` | `0 finding(s)`; group 15 refuses `Reflection.Emit`, `CreateProcess`, `Process.Start`, `LoadLibrary`, `VirtualAlloc`/`VirtualProtect` and the capabilities `runFullTrust`, `codeGeneration`, `allowElevation`, `packageManagement` |
 | Any API that a capability gates (location, camera, microphone, contacts, calendar, libraries, network) | `node tools/check-vb.mjs` | `0 finding(s)`; group 16 fails when the code uses such an API and no manifest declares the capability. It is one-directional on purpose — a browser may hold capabilities no line of its code references, because hosted pages are what ask |
 | A `{ThemeResource}` key in XAML | `node tools/check-vb.mjs` | `0 finding(s)`; group 9 checks every key against `tools/wp81-theme-keys.txt` |
-| Any `.vbproj` `ProjectTypeGuids` | `node tools/check-vb.mjs` | `0 finding(s)`; group 14 requires the Windows Phone 8.1 flavour GUID wherever `TargetPlatformIdentifier` is `WindowsPhoneApp` |
+| Any `.vbproj` `ProjectTypeGuids`, and the `.sln` entries | `node tools/check-vb.mjs` | `0 finding(s)`; group 14 requires the Windows Phone 8.1 flavour GUID wherever `TargetPlatformIdentifier` is `WindowsPhoneApp`, requires the VB factory GUID and `/` separators in every `Project` line of `BrowserForWP.sln`, and refuses the flavour property's name anywhere ahead of its element — including in a comment, which is a load failure the IDE reports and no build can |
+| Whether a solution actually loads | `devenv.com BrowserForWP.sln /build "Debug|ARM"` in the guest | `Build: 7 succeeded, 0 failed` and no `not installed` line. The only oracle for the IDE's project system: `MSBuild` reads neither the type GUIDs nor the text-scan trap, so it is green when the IDE cannot open a project at all |
 | The theme-key oracle itself | `bash tools/wp81-theme-keys.sh` | `wrote .../tools/wp81-theme-keys.txt (523 keys)` |
 | `BrowserForWP/Assets/**` | `python3 tools/make_logo.py` | one line per generated PNG, exit code 0 |
 | UI / XAML / VB app code | Build in the guest: `tools\vm-build.cmd /t:Rebuild` | `BUILD_EXIT=0`, no `BC` errors; only the two deliberate `ResourceLoader` warnings |
