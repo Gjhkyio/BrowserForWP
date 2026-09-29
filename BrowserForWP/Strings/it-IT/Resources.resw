@@ -335,4 +335,23 @@
   <data name="LiteRedirects" xml:space="preserve">
     <value>Preferisci versioni leggere</value>
   </data>
+  <!-- Server remoto: dove sono disegnate le pagine, e cosa costa -->
+  <data name="RemoteNotice" xml:space="preserve">
+    <value>Le pagine sono disegnate dal server, quindi chi lo gestisce può leggere tutto quello che leggi tu, password comprese. Lascia disattivato se non gestisci tu il server o non ti fidi di chi lo fa.</value>
+  </data>
+  <data name="RemoteServerLabel" xml:space="preserve">
+    <value>Indirizzo del server</value>
+  </data>
+  <data name="RemoteTokenLabel" xml:space="preserve">
+    <value>Token del dispositivo</value>
+  </data>
+  <data name="RemoteBackupLabel" xml:space="preserve">
+    <value>Indirizzo del server di riserva (facoltativo)</value>
+  </data>
+  <data name="RemoteBackupTokenLabel" xml:space="preserve">
+    <value>Token del dispositivo di riserva (facoltativo)</value>
+  </data>
+  <data name="RemoteUseServer" xml:space="preserve">
+    <value>Disegna le pagine sul server</value>
+  </data>
 </root>

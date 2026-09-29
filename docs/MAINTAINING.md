@@ -1265,6 +1265,73 @@ Crypto is the one layer covered better off-device than a VB project could cover
 it, because the prototypes exercise the *same algorithm* against published RFC
 vectors and live servers. Do not claim UI or XAML coverage: neither exists.
 
+## The remote engine, verified by hand
+
+The remote engine has no end-to-end test here, and cannot have one: it needs a live
+server and a handset, and this development host is an Apple silicon Mac with no
+phone, no emulator and no Docker. The table below **is** the verification for that
+task, and it is **empty on purpose**. A row that was not run stays blank; filling
+one in from reading the code would make this table worth less than not having it.
+
+Ran it: 2026-09-29. Device: none available. Server: none reachable.
+
+| Step | Expected | Result |
+| --- | --- | --- |
+| Choose "Server" in Settings with no url set | The engine says it is not configured, and nothing is sent anywhere. | |
+| Set a url but no token | The primary is tried, then the secondary, then the engine reports the servers unreachable. | |
+| Paste the token from `bfwp-device add` | The page appears. | |
+| Type a url in the address bar | The page is drawn by the server. | |
+| Tap a link | The navigation happens on the server and a new frame arrives. | |
+| Scroll | The scroll happens server-side; the frame follows. | |
+| Type in a form field | The keystrokes cross, the text appears in the frame. | |
+| Press the phone's back button | The shell's back goes to the previous page. | |
+| Stop the server, then navigate | The secondary is used, and the status line says so. | |
+| Play a page with sound | Sound, if `WITH_AUDIO=1` and PulseAudio are running. | |
+
+**What this round does verify**, and with what:
+
+| Claim | Evidence |
+| --- | --- |
+| The wire format reproduces the server's own bytes | `node tools/proto/remote-protocol.mjs` → `91/91 checks passed` |
+| The primary/secondary rule and url normalisation hold | `node tools/proto/remote-servers.mjs` → `19/19`; `node tools/proto/core-logic.mjs` → `66 assertions, 0 failure(s)` |
+| The engine decision table is unchanged | `node tools/proto/engine-choice.mjs` → `23/23` |
+| No mechanical defect of the seventeen checked kinds | `node tools/check-vb.mjs` → `16 check groups run, 0 finding(s)` |
+| It compiles, for real, on the phone's toolchain | Six configurations, `BUILD_EXIT=0`: Debug/ARM, Debug/x86, Release/ARM, Release/x86 as solution builds, and Debug/Release as `Any CPU` app-project builds. Only the two deliberate `BC40000` warnings. |
+
+**Three defects this round found**, two by the compiler and one by reading the
+file being edited. All three had passed every checker in the repository.
+
+*Found by the guest build:*
+
+- `RemoteServers` and `RemoteServerSettings` are declared in
+  `BrowserForWP.Core.**Remote**`, while the wire format is in
+  `BrowserForWP.Core.Engine.**Remote**`. Both files sit in the same folder,
+  `BrowserForWP.Core/Engine/Remote/`, so `Imports BrowserForWP.Core.Engine.Remote`
+  looked right and `tools/check-vb.mjs` group 5 accepted it — that namespace does
+  exist, it is simply not the one the type is in. BC30451 plus BC30002, twice.
+- `DisplayInformation.ResolutionScale` is **obsolete on Windows Phone** and
+  "can return incorrect results"; the phone's own compiler says so, in Italian, in
+  `BC40019`, and names the replacement (`RawPixelsPerViewPixel`). It is a
+  deprecation warning about the exact value that sizes the picture on the glass,
+  and it arrived as a warning in an otherwise green build.
+
+*Found by reading `MainPage.xaml.vb`, and it is the worst of the three:*
+
+- `OnNavigatedTo` applied the localized strings BEFORE it chose an engine, and
+  `ApplyLocalizedStrings` reads `_engine.Capabilities`. On a first launch
+  `_engine` is `Nothing`, so the shell dereferenced it and threw inside
+  `OnNavigatedTo`, where nothing catches: **the app crashed on start.** It has
+  been that way since the engine became a choice, and every table in this file
+  that says "not run on a handset" is why nobody noticed. No compiler rejects it
+  and no checker here could see it. The fix is the order of two adjacent lines,
+  with the reason written where the lines are.
+
+**Not verified, and not claimed:** everything that needs a handset or a server.
+That includes the whole of `Rendering/RemoteScreen.vb` — the tile decode, the
+1/dpr scale, tap and scroll mapping, and the hidden `TextBox` that owns the soft
+keyboard — and the audio path, whose server half does not exist yet either (the
+capture end needs a sound card; see the notes in `Docker-BrowserForWP`).
+
 ## Release checklist
 
 - [ ] `node tools/gen-vectors.mjs` → `53 assertions, 0 failure(s)`

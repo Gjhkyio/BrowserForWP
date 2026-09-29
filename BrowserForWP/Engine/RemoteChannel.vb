@@ -40,6 +40,7 @@ Namespace Engine
         Private _activeUrl As String = String.Empty
         Private _readLoop As Task
         Private _closed As Boolean
+        Private _closedOnPurpose As Boolean
 
         Public ReadOnly Property IsOpen As Boolean
             Get
@@ -53,6 +54,7 @@ Namespace Engine
             End Get
         End Property
 
+        ''' <summary>The PAGE url this connection was last asked for, not a server.</summary>
         Public ReadOnly Property ActiveUrl As String
             Get
                 Return _activeUrl
@@ -82,6 +84,7 @@ Namespace Engine
             If String.IsNullOrEmpty(token) Then Throw New RemoteChannelException("no device token")
 
             _closed = False
+            _closedOnPurpose = False
             _tls = New Tls13Client(host)
             Await _tls.ConnectAsync(host, port)
 
@@ -113,11 +116,25 @@ Namespace Engine
         End Function
 
         ''' <summary>
-        ''' Starts the read loop. `onMessage` receives the decrypted payload of every
-        ''' sealed server message; `onClosed` receives a reason, once, when the
-        ''' connection ends for any cause.
+        ''' Starts the read loop. `onMessage` receives the type, the SEQUENCE NUMBER
+        ''' and the decrypted payload of every sealed server message; `onClosed`
+        ''' receives a reason, once, when the connection ends for any cause.
+        '''
+        ''' THE SEQUENCE NUMBER IS HANDED OVER, AND IT IS AWAITED. Both parts of that
+        ''' sentence are load-bearing and both were wrong in the first version:
+        '''
+        '''   * The sequence is what a FRAME acknowledgement names. The server holds
+        '''     its screencast until an ACK arrives for the frame it has in flight
+        '''     (src/session.js, rule 4), so a handler that cannot see the number
+        '''     cannot acknowledge anything, and the client would receive exactly one
+        '''     frame per connection while looking perfectly healthy.
+        '''   * The handler is a Task and the loop awaits it, so two messages are never
+        '''     processed at once. Drawing a frame is asynchronous -- it decodes a JPEG
+        '''     -- and a handler that returned at its first Await would let the next
+        '''     message overtake the one still being drawn.
         ''' </summary>
-        Public Sub StartReading(onMessage As Action(Of Byte, Byte()), onClosed As Action(Of String))
+        Public Sub StartReading(onMessage As Func(Of Byte, UInteger, Byte(), Task),
+                               onClosed As Action(Of String))
             If _channel Is Nothing Then Throw New RemoteChannelException("not connected")
 
             Dim channel As SealedChannel = _channel
@@ -125,7 +142,7 @@ Namespace Engine
         End Sub
 
         Private Async Function ReadLoopAsync(channel As SealedChannel,
-                                             onMessage As Action(Of Byte, Byte()),
+                                             onMessage As Func(Of Byte, UInteger, Byte(), Task),
                                              onClosed As Action(Of String)) As Task
             Dim reason As String = "the connection ended"
             Try
@@ -146,8 +163,22 @@ Namespace Engine
                         Exit Do
                     End If
 
+                    ' Something asked this connection to stop WHILE the read above was
+                    ' waiting. Dispatching now would hand a replaced connection's
+                    ' message to a handler that no longer belongs to it -- a frame
+                    ' from the page the person just left, drawn over the one they
+                    ' just asked for.
+                    If _closed Then
+                        reason = "this connection was closed on purpose"
+                        Exit Do
+                    End If
+
                     Dim payload As Byte() = channel.Open(frame.Header, frame.Seq, frame.Payload)
-                    onMessage(frame.Type, payload)
+                    ' Awaited, so the handler finishes before the next frame is read.
+                    ' An exception it does not catch is reported as a connection
+                    ' failure rather than dropped, because a message that cannot be
+                    ' handled is not a message to continue past.
+                    Await onMessage(frame.Type, frame.Seq, payload)
                 Loop
             Catch ex As SealedChannelException
                 reason = "a sealed frame was refused: " & ex.Message
@@ -158,12 +189,32 @@ Namespace Engine
             End Try
 
             _closed = True
+
+            ' A close THIS CLIENT asked for is not a failure to report. Without
+            ' this, every second navigation would raise "the connection failed"
+            ' moments after the page it replaced had rendered: ReplaceChannel
+            ' disconnects the old connection asynchronously, so the read loop of the
+            ' connection just retired reaches its end AFTER the new page has been
+            ' reported, and the shell would show an error over a working page.
+            If _closedOnPurpose Then Return
+
             Try
                 onClosed(reason)
             Catch
                 ' A handler that throws must not take the loop's error reporting
                 ' with it; the loop is already over.
             End Try
+        End Function
+
+        ''' <summary>
+        ''' Asks the server for a page and remembers which one. The url is kept
+        ''' because the shell asks this connection where it is pointed, and a
+        ''' connection that only knows other people's urls is a connection the shell
+        ''' has to keep a second copy of.
+        ''' </summary>
+        Public Async Function NavigateAsync(url As String) As Task
+            _activeUrl = url
+            Await SendAsync(RemoteMessageType.Navigate, RemoteMessages.EncodeNavigate(url))
         End Function
 
         ''' <summary>Seals a payload and writes it. One call, one frame.</summary>
@@ -211,6 +262,7 @@ Namespace Engine
         ''' </summary>
         Public Sub Disconnect()
             _closed = True
+            _closedOnPurpose = True
             _channel = Nothing
             _helloAck = Nothing
             Dim tls As Tls13Client = _tls

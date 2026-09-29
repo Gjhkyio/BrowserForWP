@@ -335,4 +335,23 @@
   <data name="LiteRedirects" xml:space="preserve">
     <value>Prefer light site versions</value>
   </data>
+  <!-- Remote server: where the pages are drawn, and what that costs -->
+  <data name="RemoteNotice" xml:space="preserve">
+    <value>The server draws the pages, so whoever runs it can read everything you read, passwords included. Leave this off unless you run the server or trust who does.</value>
+  </data>
+  <data name="RemoteServerLabel" xml:space="preserve">
+    <value>Server address</value>
+  </data>
+  <data name="RemoteTokenLabel" xml:space="preserve">
+    <value>Device token</value>
+  </data>
+  <data name="RemoteBackupLabel" xml:space="preserve">
+    <value>Backup server address (optional)</value>
+  </data>
+  <data name="RemoteBackupTokenLabel" xml:space="preserve">
+    <value>Backup device token (optional)</value>
+  </data>
+  <data name="RemoteUseServer" xml:space="preserve">
+    <value>Draw pages on the server</value>
+  </data>
 </root>

@@ -151,6 +151,35 @@
                     <TextBlock x:Name="EngineStatusText" TextWrapping="Wrap"
                                FontSize="12" Opacity="0.8" Margin="0,4,0,0"/>
 
+                    <!--
+                      The remote engine's server, and the disclosure that belongs
+                      with it. These fields exist because the engine reads them: the
+                      plan for this round specified no settings surface at all, and
+                      then asked a person to paste a token into one.
+
+                      No PasswordBox for the tokens. A device token is not typed
+                      from memory and not read over a shoulder; it is pasted once
+                      from the server's own output, and a masked field that cannot be
+                      checked for a stray character is the worse tool for that.
+                    -->
+                    <TextBlock x:Name="RemoteNoticeLabel" TextWrapping="Wrap"
+                               FontSize="12" Opacity="0.8" Margin="0,10,0,0"/>
+                    <TextBlock x:Name="RemoteServerLabel" Margin="0,8,0,4"/>
+                    <TextBox x:Name="RemoteServerBox" Width="280" InputScope="Url"
+                             LostFocus="RemoteServerBox_LostFocus"/>
+                    <TextBlock x:Name="RemoteTokenLabel" Margin="0,8,0,4"/>
+                    <TextBox x:Name="RemoteTokenBox" Width="280"
+                             LostFocus="RemoteTokenBox_LostFocus"/>
+                    <TextBlock x:Name="RemoteBackupLabel" Margin="0,8,0,4"/>
+                    <TextBox x:Name="RemoteBackupBox" Width="280" InputScope="Url"
+                             LostFocus="RemoteBackupBox_LostFocus"/>
+                    <TextBlock x:Name="RemoteBackupTokenLabel" Margin="0,8,0,4"/>
+                    <TextBox x:Name="RemoteBackupTokenBox" Width="280"
+                             LostFocus="RemoteBackupTokenBox_LostFocus"/>
+                    <CheckBox x:Name="RemoteEnabledToggle" Margin="0,4,0,0"
+                              Checked="RemoteEnabledToggle_Checked"
+                              Unchecked="RemoteEnabledToggle_Unchecked"/>
+
                     <TextBlock x:Name="TabsTitle" FontSize="18" Margin="0,16,0,4"/>
                     <ListBox x:Name="TabsList" Height="80" Width="280"
                              SelectionChanged="TabsList_SelectionChanged"/>

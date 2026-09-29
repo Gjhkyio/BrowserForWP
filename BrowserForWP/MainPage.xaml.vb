@@ -7,6 +7,9 @@ Imports BrowserForWP.Core.Browser
 Imports BrowserForWP.Core.Diagnostics
 Imports BrowserForWP.Core.Engine
 Imports BrowserForWP.Core.Engine.Native
+Imports BrowserForWP.Core.Engine.Remote
+' RemoteServers is in BrowserForWP.Core.Remote; see the note in Engine/RemoteEngine.vb.
+Imports BrowserForWP.Core.Remote
 Imports BrowserForWP.Core.Storage
 Imports BrowserForWP.Localization
 Imports BrowserForWP.Net.Tls13
@@ -38,6 +41,13 @@ Public NotInheritable Class MainPage
     Private _navigationToken As Object
     Private _searchTemplates As String()
 
+    ' The remote engine's sound. It lives here rather than in the engine because
+    ' MediaElement is a piece of the shell's visual tree, and the engine's host is
+    ' a picture: a control that draws nothing still has to be in the tree for the
+    ' platform to play it.
+    Private ReadOnly _audio As New MediaElement()
+    Private _audioHosted As Boolean
+
     ''' <summary>True while pickers/lists are repopulated, so programmatic selection is ignored.</summary>
     Private _populatingLanguage As Boolean = False
     Private _refreshingTabs As Boolean = False
@@ -60,11 +70,21 @@ Public NotInheritable Class MainPage
         }
 
         LoadPersistedState()
+
+        ' THE ENGINE IS CHOSEN BEFORE THE STRINGS ARE APPLIED, and the order is not
+        ' cosmetic. ApplyLocalizedStrings reads _engine.Capabilities to build the
+        ' diagnostics line, and it used to run FIRST -- so on the very first launch
+        ' the shell dereferenced Nothing before any engine existed. A
+        ' NullReferenceException inside OnNavigatedTo is not caught by anything, so
+        ' that ordering crashed the app on start: every feature in this repository
+        ' was unreachable, including the ten rows in the hand-written verification
+        ' table in docs/MAINTAINING.md, which all begin at a screen that would never
+        ' have drawn. Nothing here needed the strings in place first.
+        ApplyEngineChoice()
         ApplyLocalizedStrings()
         PopulateLanguagePicker()
         PopulateSearchEnginePicker()
         PopulateEnginePicker()
-        ApplyEngineChoice()
         RefreshTabsList()
         RefreshHistoryList()
         RefreshFavoritesList()
@@ -196,6 +216,17 @@ Public NotInheritable Class MainPage
         LiteRedirectsToggle.IsChecked = _appSettings.LiteRedirects
         HomepageBox.Text = _appSettings.Homepage
         DohServerBox.Text = _appSettings.DohUrl
+        RemoteNoticeLabel.Text = Localizer.Get("RemoteNotice")
+        RemoteServerLabel.Text = Localizer.Get("RemoteServerLabel")
+        RemoteTokenLabel.Text = Localizer.Get("RemoteTokenLabel")
+        RemoteBackupLabel.Text = Localizer.Get("RemoteBackupLabel")
+        RemoteBackupTokenLabel.Text = Localizer.Get("RemoteBackupTokenLabel")
+        RemoteEnabledToggle.Content = Localizer.Get("RemoteUseServer")
+        RemoteServerBox.Text = _appSettings.RemotePrimaryUrl
+        RemoteTokenBox.Text = _appSettings.RemotePrimaryToken
+        RemoteBackupBox.Text = _appSettings.RemoteSecondaryUrl
+        RemoteBackupTokenBox.Text = _appSettings.RemoteSecondaryToken
+        RemoteEnabledToggle.IsChecked = _appSettings.RemoteEnabled
 
         Dim capabilities = _engine.Capabilities
         ' The layer state used to be hardcoded English ("compatibility layer
@@ -399,8 +430,17 @@ Public NotInheritable Class MainPage
     End Sub
 
     Private Async Sub ApplyNightMode()
+        ' TryCast, not DirectCast. Night mode is a Trident feature applied inside
+        ' the page; the remote engine applies it on the SERVER through the SETTINGS
+        ' message instead, so there is nothing for this method to do. With
+        ' DirectCast the remote engine made this line throw and the empty Catch
+        ' below swallow it -- the same silent nothing, arrived at by an exception.
+        ' An exception used as control flow, inside a handler that discards it, is
+        ' how a real failure later gets discarded too.
+        Dim scripted As TridentEngine = TryCast(_engine, TridentEngine)
+        If scripted Is Nothing Then Return
         Try
-            Await DirectCast(_engine, TridentEngine).SetNightModeAsync(_appSettings.NightMode)
+            Await scripted.SetNightModeAsync(_appSettings.NightMode)
         Catch ex As Exception
         End Try
     End Sub
@@ -427,6 +467,52 @@ Public NotInheritable Class MainPage
             _appSettings.DohUrl = typedDoh
             SavePersistedState()
         End If
+    End Sub
+
+    ''' <summary>
+    ''' The two server addresses, normalized on the way in.
+    '''
+    ''' Normalize, and not the raw text: it is the function that turns "what a
+    ''' person typed" into "a web address or nothing", and a value it refuses must
+    ''' land in the box as the empty string. An address this build cannot honour has
+    ''' to look unconfigured, because the alternative is a browser that fails later,
+    ''' somewhere else, with a message about a server the person believes they
+    ''' entered correctly.
+    ''' </summary>
+    Private Sub RemoteServerBox_LostFocus(sender As Object, e As RoutedEventArgs)
+        _appSettings.RemotePrimaryUrl = RemoteServers.Normalize(RemoteServerBox.Text)
+        RemoteServerBox.Text = _appSettings.RemotePrimaryUrl
+        SavePersistedState()
+    End Sub
+
+    Private Sub RemoteBackupBox_LostFocus(sender As Object, e As RoutedEventArgs)
+        _appSettings.RemoteSecondaryUrl = RemoteServers.Normalize(RemoteBackupBox.Text)
+        RemoteBackupBox.Text = _appSettings.RemoteSecondaryUrl
+        SavePersistedState()
+    End Sub
+
+    Private Sub RemoteTokenBox_LostFocus(sender As Object, e As RoutedEventArgs)
+        _appSettings.RemotePrimaryToken = RemoteTokenBox.Text.Trim()
+        SavePersistedState()
+    End Sub
+
+    Private Sub RemoteBackupTokenBox_LostFocus(sender As Object, e As RoutedEventArgs)
+        _appSettings.RemoteSecondaryToken = RemoteBackupTokenBox.Text.Trim()
+        SavePersistedState()
+    End Sub
+
+    Private Sub RemoteEnabledToggle_Checked(sender As Object, e As RoutedEventArgs)
+        _appSettings.RemoteEnabled = True
+        SavePersistedState()
+    End Sub
+
+    Private Sub RemoteEnabledToggle_Unchecked(sender As Object, e As RoutedEventArgs)
+        _appSettings.RemoteEnabled = False
+        SavePersistedState()
+        ' A connection that is open stays open until the person navigates again,
+        ' but a page already being drawn on somebody's server is not something this
+        ' handler can take back. The button is the promise; the socket is closed by
+        ' the next navigation or by Stop.
     End Sub
 
     Private Sub AddressBox_KeyDown(sender As Object, e As KeyRoutedEventArgs)
@@ -668,7 +754,13 @@ Public NotInheritable Class MainPage
             If String.IsNullOrEmpty(searchTerm) Then
                 Return
             End If
-            Dim foundIt As Boolean = Await DirectCast(_engine, TridentEngine).FindInPageAsync(searchTerm)
+            ' TryCast: Find is a Trident feature. The remote engine has its own
+            ' FIND message and a FindResult to answer with, which the remote screen
+            ' wires up; until then this does nothing rather than throwing into the
+            ' empty Catch below.
+            Dim scripted As TridentEngine = TryCast(_engine, TridentEngine)
+            If scripted Is Nothing Then Return
+            Dim foundIt As Boolean = Await scripted.FindInPageAsync(searchTerm)
             If foundIt Then
                 FindResult.Text = String.Empty
             Else
@@ -680,7 +772,13 @@ Public NotInheritable Class MainPage
 
     Private Async Sub ReadingButton_Click(sender As Object, e As RoutedEventArgs)
         Try
-            Dim entered As Boolean = Await DirectCast(_engine, TridentEngine).EnterReadingModeAsync()
+            ' TryCast: reading mode rewrites the document, which is a Trident
+            ' feature. For the remote engine the reader fallback is the server's
+            ' business -- and it is an ALTERNATIVE to the engine fallback, not a
+            ' step after it (see ApplyAutoReader).
+            Dim scripted As TridentEngine = TryCast(_engine, TridentEngine)
+            If scripted Is Nothing Then Return
+            Dim entered As Boolean = Await scripted.EnterReadingModeAsync()
             If Not entered Then
                 ErrorText.Text = Localizer.Get("ErrorPageFailed")
                 ErrorText.Visibility = Visibility.Visible
@@ -1016,10 +1114,23 @@ Public NotInheritable Class MainPage
     ''' </summary>
     Private ReadOnly Property ScriptedEngine As TridentEngine
         Get
-            If _engine IsNot Nothing AndAlso _engine.Capabilities.SupportsScripting Then
-                Return DirectCast(_engine, TridentEngine)
-            End If
-            Return Nothing
+            ' TryCast, and the flag alone was never enough. `SupportsScripting` says
+            ' the engine runs scripts; this property needs the stronger, narrower
+            ' thing -- an engine whose script host is ON THIS DEVICE, so that we can
+            ' inject into it.
+            '
+            ' RemoteEngine reports SupportsScripting = True and is right to: the
+            ' page's scripts really do run, inside Chromium on the server, where
+            ' this device can neither see nor invoke them. So the guard passed, the
+            ' DirectCast threw InvalidCastException, and every caller had already
+            ' been written for the OTHER contract -- two of them open with
+            ' `If scripted Is Nothing Then Return`, and the comment further down
+            ' states that this property returns Nothing for the remote engine.
+            ' The documentation, the callers and the implementation disagreed, and
+            ' the implementation was the one that was wrong.
+            If _engine Is Nothing Then Return Nothing
+            If Not _engine.Capabilities.SupportsScripting Then Return Nothing
+            Return TryCast(_engine, TridentEngine)
         End Get
     End Property
 
@@ -1042,8 +1153,10 @@ Public NotInheritable Class MainPage
             If _remoteEngine Is Nothing Then
                 _remoteEngine = New BrowserForWP.Engine.RemoteEngine(_appSettings, _pinTable)
                 AddHandler _remoteEngine.Navigated, AddressOf OnRemoteNavigated
+                AddHandler _remoteEngine.Audio, AddressOf OnAudioMessage
             End If
             _engine = _remoteEngine
+            HostAudioElement()
         Else
             If _tridentEngine Is Nothing Then
                 _tridentEngine = New TridentEngine()
@@ -1058,7 +1171,61 @@ Public NotInheritable Class MainPage
         End If
 
         ContentHost.Child = DirectCast(_engine.Source, UIElement)
+
+        ' Find, reading mode and night mode rewrite or inspect the DOCUMENT, and on
+        ' this engine there is no document here to touch: the page is a picture of
+        ' Chromium's own. The controls are disabled rather than left to do nothing,
+        ' because a button that silently does nothing is the shape of lie this
+        ' repository keeps finding. The capability flag alone cannot decide this --
+        ' the remote engine reports SupportsScripting truthfully, and it is telling
+        ' the truth about a machine on the other side of the network.
+        Dim localScripting As Boolean = _engine.Capabilities.SupportsScripting AndAlso
+                                        TypeOf _engine Is TridentEngine
+        FindButton.IsEnabled = localScripting
+        ReadingButton.IsEnabled = localScripting
+        NightModeToggle.IsEnabled = localScripting
+
         EngineStatusText.Text = Localizer.Get(EngineChoice.Explain(_appSettings.EngineSetting, False, 0))
+    End Sub
+
+    ''' <summary>
+    ''' Puts the MediaElement in the tree, once. Its parent is ContentHost's, which
+    ''' is the Grid the page lives in: a Border holds exactly one child, and that
+    ''' child is the engine.
+    ''' </summary>
+    Private Sub HostAudioElement()
+        If _audioHosted Then Return
+        Try
+            Dim hostGrid As Panel = TryCast(ContentHost.Parent, Panel)
+            If hostGrid Is Nothing Then Return
+            ' A MediaElement with nothing to show must not take a tap meant for the
+            ' page underneath it.
+            _audio.IsHitTestVisible = False
+            _audio.AutoPlay = True
+            hostGrid.Children.Add(_audio)
+            _audioHosted = True
+        Catch
+            ' A tree that will not take it means silent sound, not a broken page.
+        End Try
+    End Sub
+
+    ''' <summary>
+    ''' The server has a sound to play, and the shell plays it. The url is the
+    ''' server's own, reached over Schannel: MediaElement cannot be fed by this
+    ''' project's TLS stack, and it does not need to be.
+    ''' </summary>
+    Private Sub OnAudioMessage(playing As Boolean, url As String)
+        Try
+            If playing AndAlso Not String.IsNullOrEmpty(url) Then
+                _audio.Source = New Uri(url)
+                _audio.Play()
+            Else
+                _audio.Stop()
+                _audio.Source = Nothing
+            End If
+        Catch
+            ' A url the media pipeline will not take is a page without sound.
+        End Try
     End Sub
 
     ''' <summary>

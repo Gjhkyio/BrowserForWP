@@ -766,6 +766,18 @@ Namespace Engine
 
         Public NotInheritable Class RemoteFramePayload
 
+            ''' <summary>The only tile format the server sends: a JPEG.</summary>
+            Public Const FormatJpeg As Byte = 1
+
+            ''' <summary>
+            ''' Bit 0 of Flags: this frame describes the WHOLE viewport, so a tile it
+            ''' does not mention is gone rather than unchanged. The server sets it on
+            ''' every frame it sends today, which is exactly why the client must not
+            ''' assume it: the differ that sends only what changed is the next step,
+            ''' and it is the frame that does NOT carry this bit.
+            ''' </summary>
+            Public Const FlagFull As Byte = &H1
+
             Public Sub New()
                 Tiles = New System.Collections.Generic.List(Of RemoteFrameTile)()
             End Sub
