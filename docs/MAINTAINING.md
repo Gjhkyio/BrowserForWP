@@ -1,6 +1,6 @@
 # Maintaining BrowserForWP
 
-Read [`ARCHITECTURE.md`](ARCHITECTURE.md) first — the four platform laws explain
+Read [`ARCHITECTURE.md`](ARCHITECTURE.md) first — the five platform laws explain
 why several otherwise-reasonable changes are impossible.
 
 ## Requirements
@@ -69,9 +69,16 @@ node tools/proto/core-logic.mjs
 # slot is where a browser decides WHERE to render instead of HOW.
 node tools/proto/remote-servers.mjs
 
+# The render protocol's wire format, both directions, checked against the bytes
+# the SERVER's own code emitted (protocol/vectors.json in Docker-BrowserForWP).
+# Must print "91/91 checks passed". It is the only statement of the protocol that
+# neither implementation wrote, which is why a client-side typo in a field offset
+# is caught here rather than as a garbled screen on a phone.
+node tools/proto/remote-protocol.mjs
+
 # The engine-choice rule: what the automatic fallback decides, and the row that
 # matters most — an absent measurement is never grounds for switching engines.
-# Must print "21/21 checks passed".
+# Must print "23/23 checks passed".
 node tools/proto/engine-choice.mjs
 
 # The shell and delivery guards that arrived with the merged browser shell.
@@ -653,7 +660,7 @@ probe and the pin store all exist and are wired. What remains is this.
    the Round 4 gap — but no runner invokes `RunAll()`. A WP8.1 ARM class library
    cannot run on the desktop, and there is no handset and no emulator, so
    **"compiled" is not "tested"**. The assertions now run off-device through
-   `tools/proto/core-logic.mjs` (60 assertions), a transliteration of
+   `tools/proto/core-logic.mjs` (66 assertions), a transliteration of
    `CoreLogicTests.vb` that must be kept in step with it. That mirror exists
    because the VB suite's first defect was invisible without execution: an
    assertion naming the heavy `duckduckgo.com` search URL that the lite-first
@@ -672,8 +679,8 @@ probe and the pin store all exist and are wired. What remains is this.
    the path was protected. It now passes `SessionInfo.LeafCertificateDer` through
    `CertificateValidator.VerifyPin` before decoding the body, and an unreadable
    certificate fails rather than passing. So: a page **viewed** in the `WebView` is
-   still unpinned (impossible — Schannel); a page **parsed** by the native engine
-   is pinned. `README.md`'s "certificate pinning for the app's transport layer" is
+   still unpinned (impossible — Schannel); a page **parsed** by the diagnostics
+   fetcher is pinned. `README.md`'s "certificate pinning for the app's transport layer" is
    accurate, and the qualifier is now load-bearing, not decorative.
 3. **Never run on a handset.** XAML layout, `WebView` behaviour,
    `DOMContentLoaded` injection, reading-mode fallback, lite redirects, night mode
@@ -798,10 +805,13 @@ request-time escape, and it was never available on Windows 10 *Mobile*. So the
 question "couldn't we have a modern engine?" has a yes in it — on a different
 operating system, as a different project.
 
-### Deferred from the native-engine phase
+### Deferred work
 
 Recorded rather than fixed. None of these is a broken promise; each is a place
-where the code is more confident than the corpus of checks behind it.
+where the code is more confident than the corpus of checks behind it. Items 1 to
+10 are inherited from the native-engine phase, whose renderer was deleted in
+Round 10 while the parser it left behind (and the diagnostics that show it) stayed;
+items 11 onwards are current.
 
 1. **The pipeline has never seen a real page.** Tokens, tree, cascade and boxes
    have only ever run against the prototypes' own fixtures. The first real
@@ -840,16 +850,29 @@ the interface, so the shell wires whichever engine it built and therefore knows
     two engine types at exactly one site. Behaviour still branches only on
     `EngineCapabilities`; construction does not. Worth doing, and it is a bigger
     diff across every call site than the user-visible feature it would unblock.
-12. **The native engine cannot be stopped.** `[Stop]` is a no-op because the fetch
-    is not cancellable through `IDocumentFetcher`. On this hardware a document
-    lays out fast enough to hide it; on a large page over a slow link it would not.
-13. **No per-tab page state in the native engine.** Switching tabs re-renders from
-    the URL, so scroll position, a reading-mode choice and anything else the page
-    had is lost. `BrowserSession` keeps URLs, not documents.
-14. **A rotation after a render does not re-lay-out.** The viewport width is read
-    once per render, so turning the phone leaves the page at the old width until
-    the next navigation. The system WebView handles this itself, which is why the
-    gap is only visible on the native engine.
+12. **Pins are not enforced on the render channel.** `Tls13Client` takes a host and
+    no pin table, so `RemoteChannel` connects to a pinned server without consulting
+    `PinStore`. A pin is therefore checked by the diagnostics fetch and by the TLS
+    probe, and **not** by the engine that carries every page. `README.md` says so in
+    both languages rather than letting the feature read as universal.
+13. **No per-tab page state in the remote engine.** One connection, one page:
+    switching tabs navigates the same session and the page's own state (scroll
+    position, a form half filled) is gone. `BrowserSession` keeps URLs, not
+    documents.
+14. **A rotation does not resize the remote viewport.** The viewport is read once
+    per navigation (`RefreshViewport`), so turning the phone leaves the server
+    drawing at the old width until the next navigation. The system WebView handles
+    this itself, which is why the gap is only visible on this engine.
+15. **The remote engine has never spoken to a server.** No part of the handshake,
+    the frame loop, the tile decode, the 1/dpr scale, the tap and scroll mapping,
+    the soft-keyboard proxy or the audio path has run against a live session.
+    `docs/MAINTAINING.md` § "The remote engine, verified by hand" is the table, and
+    its rows are blank.
+16. **The server bakes in no address, and that is deliberate.** Shipping a default
+    would send every page, and every password, through a machine the user did not
+    choose; the engine stays off until an address and a token are configured. One
+    line in `AppSettings` is all a default would need, and that line is not written
+    on purpose.
 
 ### Error taxonomy
 
@@ -1211,6 +1234,55 @@ bytes are pinned by vectors and `RemoteChannel` is a socket, a loop and error
 handling, but the handshake has not run against the Node server, and nothing has
 been drawn on a handset.
 
+### Round 10 — the server draws, the phone holds the picture
+
+The remote engine stops being a skeleton. `RemoteEngine` walks
+`RemoteServers.Order`, connects over the app's own TLS 1.3 stack, decodes `FRAME`
+into tiles it draws on a `Canvas`, and turns a tap, a drag and a keystroke into
+`TAP`, `SCROLL` and `TEXT`. `RemoteChannel` gains `NavigateAsync`; the shell gains
+the four server fields (the plan specified a settings surface and then asked a
+person to paste a token into one) and a `MediaElement` for the server's `AUDIO`
+message.
+
+**The read loop's handler signature changed, and both changes are load-bearing.**
+It now receives the frame's SEQUENCE NUMBER and is AWAITED. Without the sequence,
+`ACK` cannot name a frame — and the server holds its screencast until an ACK for
+the frame in flight arrives (`src/session.js`, rule 4), so a client that could not
+acknowledge would receive exactly one frame per connection **and look perfectly
+healthy**. Without the await, drawing a frame (which decodes a JPEG) would be
+overtaken by the next message: two frames decoded at once, drawn in the wrong
+order, with the ACK for the older one arriving last. Neither defect is visible in
+a screenshot; both are visible in the protocol.
+
+**A close this client asked for is no longer reported as a failure.**
+`ReplaceChannel` retires the previous connection asynchronously, so its read loop
+reached its end *after* the new page had been reported, and the shell put an error
+over a working page on every second navigation. `Disconnect` now records that the
+close was requested, and the loop skips the callback for it.
+
+**Three defects, and none of them was caught by a checker.** Two came from the
+guest compiler: `RemoteServers` is declared in `BrowserForWP.Core.Remote` while the
+wire format is in `BrowserForWP.Core.Engine.Remote`, and both files share the
+folder `BrowserForWP.Core/Engine/Remote/`, so the import looked right and group 5
+accepted it — a folder is not a namespace (BC30451 and BC30002, twice). And
+`DisplayInformation.ResolutionScale` is *obsolete on Windows Phone*, which BC40019
+says in Italian while naming `RawPixelsPerViewPixel`; the deprecated call was the
+one that sizes the picture on the glass. The third came from reading the file this
+round edits: `OnNavigatedTo` applied the localized strings before choosing an
+engine, and `ApplyLocalizedStrings` reads `_engine.Capabilities` — **so the app
+crashed on start**, on a first launch, inside a handler with no `Try` around it. It
+had been that way since the engine became a choice. Every row of every
+hand-verification table in this file begins at the screen it never drew.
+
+**Verified:** six configurations `BUILD_EXIT=0` (four solution builds plus both
+`Any CPU` app-project builds) with only the two deliberate `BC40000`
+`ResourceLoader` warnings; `remote-protocol.mjs` 91/91; `remote-servers.mjs` 19/19;
+`core-logic.mjs` 66 assertions; `engine-choice.mjs` 23/23; `boxtree.mjs` 48/48;
+`check-vb.mjs` 16 groups over 17 categories, 0 finding(s).
+**Not verified:** everything that needs a handset or a server — see § "The remote
+engine, verified by hand", whose ten rows are blank rather than marked as passing,
+and deferred items 15 and 16.
+
 ## The loop
 
 Every change follows five steps, in order. The canonical version lives in
@@ -1241,7 +1313,8 @@ What is and is not covered:
 | `tools/gen-vectors.mjs`, `tools/proto/*.mjs` | The executable prototypes. `gen-vectors.mjs` recomputes HKDF, X25519 and AES-GCM and asserts RFC 5869 / 7748 / 8448 and NIST CAVS vectors; `tls13.mjs` completes real handshakes against live servers. | `node`, on any machine. **This is the real crypto verification.** |
 | `tests/BrowserForWP.Crypto.Tests/` (`Vectors.generated.vb` + `VectorsSmokeTests.vb`) | Generated VB constants from those same vectors, plus length/shape checks. | **Compiled by the guest build; never executed.** |
 | `tests/BrowserForWP.Core.Tests/CoreLogicTests.vb` | Address normalisation, tab state, session/UA, settings, history, favourites, pin normalisation, hostname wildcards, language matching. | **Compiled by the guest build; never executed.** |
-| `tools/proto/core-logic.mjs` | A transliteration of `CoreLogicTests.vb`. 60 assertions, exit 1 on failure. | `node`, on any machine. **This is what actually runs those assertions.** |
+| `tools/proto/core-logic.mjs` | A transliteration of `CoreLogicTests.vb`. 66 assertions, exit 1 on failure. | `node`, on any machine. **This is what actually runs those assertions.** |
+| `tools/proto/remote-protocol.mjs` | The render protocol's wire format: header, every encoder and decoder, the frame splitter, and the AEAD seal both ways, checked byte-for-byte against `protocol/vectors.json` — which the SERVER's own code produced. The only statement of the protocol that neither implementation wrote. 91 checks. | `node`, on any machine. |
 | `tools/proto/remote-servers.mjs` | `RemoteServers.vb`: url normalisation, the primary/secondary order, duplicate collapsing, and the source contract that Core holds resource keys and not prose. | `node`, on any machine. |
 | `tools/proto/engine-choice.mjs` | The `EngineChoice` decision table, plus the source contract around it: the constants by name, and the reasons as resource keys rather than sentences. | `node`, on any machine. |
 | `tools/check-vb.mjs` | 17 categories / 16 check groups over every `.vb`, `.vbproj`, `.xaml` and `.resw`, including every `{ThemeResource}` key, every project's flavour GUID, (group 13) doc-comment structure, (group 15) every privileged API name and every manifest capability that would ask the platform for something it cannot grant, (group 16) every API whose capability the manifest fails to declare, and (group 17) every declaration that names a VB keyword. | `node`, on any machine. |

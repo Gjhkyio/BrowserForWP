@@ -1,7 +1,7 @@
 # BrowserForWP
 
-**Un browser con trasporto moderno per Windows Phone 8.1 — interamente sul
-dispositivo, senza alcun backend.**
+**Un browser con trasporto moderno per Windows Phone 8.1 — tutto sul telefono,
+più un server opzionale che disegna le pagine che questo telefono non può.**
 
 [English](README.md) · [Italiano](README.it.md)
 
@@ -20,13 +20,13 @@ sistema, non un limite delle ambizioni di questo progetto.
 
 | Obiettivo | Realtà su Windows Phone 8.1 | Cosa fa BrowserForWP |
 | --- | --- | --- |
-| Includere il motore **Chromium** | Non esiste alcuna build di Chromium/Blink per WinRT-ARM 8.1. I container delle app non possono ospitare un renderer multi-processo in sandbox. | Fornisce un `IBrowserEngine` sostituibile. Su WP8.1 distribuisce `TridentEngine`; `WebView2Engine` (Chromium) e `GeckoViewEngine` (Firefox) si innestano su qualunque piattaforma li possieda. |
+| Includere il motore **Chromium** | Non esiste alcuna build di Chromium/Blink per WinRT-ARM 8.1. I container delle app non possono ospitare un renderer multi-processo in sandbox. | Fornisce un `IBrowserEngine` sostituibile. Su WP8.1 distribuisce `TridentEngine`; `WebView2Engine` (Chromium) e `GeckoViewEngine` (Firefox) si innestano su qualunque piattaforma li possieda. Dal Round 10 esiste una terza possibilità che non richiede alcun port: il **motore remoto opzionale** esegue Chromium su un server che configuri tu e manda l'immagine attraverso il canale TLS 1.3 dell'app. Vedi *Nessun backend per impostazione predefinita* nella tabella e la Legge 5 in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). |
 | Includere il motore **Firefox / Gecko** | Mozilla ha cancellato Firefox per Windows Phone nel 2015. Nessun binario è mai stato distribuito. | Stessa astrazione sostituibile di cui sopra. |
 | **TLS 1.3** | Schannel su WP8.1 si ferma a **TLS 1.2** e il sistema non espone alcuna API per alzare il limite. | **Implementato dalle RFC, in codice gestito, sul dispositivo**: un client TLS 1.3 completo (`BrowserForWP.Net`) che gira su un `StreamSocket` grezzo, così il livello di rete dell'app parla TLS 1.3 già oggi. |
-| **HTTPS moderno** | La `WebView` di sistema negozia ciò che Schannel supporta. | `Tls13Client` + resolver DNS-over-HTTPS + pinning dei certificati per il livello di trasporto dell'app. |
+| **HTTPS moderno** | La `WebView` di sistema negozia ciò che Schannel supporta. | `Tls13Client` + resolver DNS-over-HTTPS + pinning dei certificati per il livello di trasporto dell'app. Il pin non copre però il canale di rendering del motore remoto: `Tls13Client` accetta un host e nessuna tabella di pin. La lacuna è registrata in `docs/MAINTAINING.md`, non lasciata da scoprire. |
 | **Pagine web moderne** | IE11 non riesce a interpretare né a eseguire il JavaScript moderno. | Un bundle di compatibilità ES5 sul dispositivo (`BrowserForWP.Polyfill`) iniettato a `DOMContentLoaded` e di nuovo al completamento, più una diagnostica che spiega *perché* un sito ha fallito. Il bundle alza il livello minimo ma non può interpretare la sintassi ES6 né fornire `Proxy`/`Intl`/grid — vedi l'elenco qui sotto. |
-| **Un motore da zero** | Su questo sistema non si può costruire un motore *al posto di* Trident, e Trident non è riconfigurabile (vedi [`docs/MAINTAINING.md`](docs/MAINTAINING.md), sezione *IE-adaptation is closed*). | Un **motore di documenti nativo** è in costruzione in `BrowserForWP.Core/Engine/Native`. Recupera una pagina attraverso il trasporto TLS 1.3 dell'app — l'unico percorso di questo prodotto che può caricare qualcosa sopra TLS 1.2 — e analizza un **sottoinsieme dichiarato** di HTML e CSS producendo un albero di box. **Non esegue JavaScript** e mai lo farà; le pagine che richiedono script restano compito di Trident, tramite il livello di compatibilità. Il layout e il disegno sono la fase successiva; oggi l'output della pipeline è visibile in **Diagnostica → Analizza la pagina corrente**. |
-| **Nessun backend** | — | Ogni componente — crittografia, TLS, DNS, polyfill, cronologia, localizzazione — gira interamente sul telefono. Nessun server, nessun servizio proxy, nessuna telemetria. |
+| **Un motore da zero** | Su questo sistema non si può costruire un motore *al posto di* Trident, e Trident non è riconfigurabile (vedi [`docs/MAINTAINING.md`](docs/MAINTAINING.md), sezione *IE-adaptation is closed*). | Una **pipeline di documenti** vive in `BrowserForWP.Core/Engine/Native`: recupera una pagina attraverso il trasporto TLS 1.3 dell'app — l'unico percorso di questo prodotto che può caricare qualcosa sopra TLS 1.2 — e analizza un **sottoinsieme dichiarato** di HTML e CSS producendo un albero di box, visibile in **Diagnostica → Analizza la pagina corrente**. **Non esegue JavaScript** e mai lo farà. Un *renderer* sul dispositivo per quell'albero è stato costruito nel Round 7 e **cancellato nel Round 10**: era una cosa più piccola di un browser, e mantenere due renderer per dimostrarlo era lo scambio sbagliato (Legge 5). |
+| **Nessun backend per impostazione predefinita** | — | Ogni componente — crittografia, TLS, DNS, polyfill, cronologia, localizzazione — gira sul telefono. Il motore remoto opzionale manda le pagine attraverso un server che configuri tu, e **quel server può leggere tutto ciò che leggi**. È disattivato finché non lo accendi, e la Legge 5 in `docs/ARCHITECTURE.md` dice perché. |
 
 > **Sull'idea del proxy locale sul dispositivo:** i Windows AppContainer
 > bloccano per impostazione predefinita il traffico verso `127.0.0.1`, quindi un
@@ -64,8 +64,11 @@ trasporto e contenuto verranno con te.
   con lo SPKI della foglia quando si connette il trasporto TLS 1.3 dell'app. Il
   traffico della `WebView` passa da Schannel, la cui validazione l'app non può
   intercettare. Un pin protegge quindi il livello di trasporto dell'app — che
-  comprende le pagine recuperate e analizzate dal motore di documenti nativo —
-  ma non le pagine che *visualizzi* nella `WebView`.
+  comprende le pagine recuperate dal parser di diagnostica — ma non le pagine che
+  *visualizzi* nella `WebView`, e nemmeno il canale di rendering del **motore
+  remoto**: `Tls13Client` accetta un host e nessuna tabella di pin. La lacuna è
+  registrata in [`docs/MAINTAINING.md`](docs/MAINTAINING.md) invece di essere
+  lasciata da scoprire.
 - **Bundle di compatibilità ES5** (`BrowserForWP.Polyfill/compat.js`) — scritto,
   verificato ES5, incluso e iniettato a `DOMContentLoaded` e al completamento
   tramite `TridentEngine.InjectPolyfillAsync`. Alza il livello minimo; non può

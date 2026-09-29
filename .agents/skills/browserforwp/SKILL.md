@@ -220,18 +220,19 @@ verified if you skipped its command.
 | `PinStore.vb` / pin comparison | `node tools/proto/pinstore.mjs` | `0 failure(s)` |
 | Test vectors themselves | `node tools/gen-vectors.mjs` | every line prefixed `✓`, exit code 0 |
 | The vector emitter itself | `node tools/gen-vectors.mjs` | `emitted VB braces balanced`, else it refuses to write, exit code 1 |
-| `BrowserForWP.Core/` logic | `node tools/proto/core-logic.mjs` | `core-logic checks, 0 failure(s)` (53 assertions) |
+| `BrowserForWP.Core/` logic | `node tools/proto/core-logic.mjs` | `core-logic checks, 0 failure(s)` (66 assertions) |
 | `Engine/Native/IDocumentFetcher.vb` / fetch rules | `node tools/proto/fetch-rules.mjs` | `25/25 checks passed` |
 | `Engine/Native/Html*.vb` | `node tools/proto/htmlparse.mjs` | `30/30 checks passed` |
 | `Engine/Native/CssParser.vb` / `SelectorMatcher.vb` | `node tools/proto/csscascade.mjs` | `47/47 checks passed` |
-| `Engine/Native/{Style,UserAgent,BoxTree}*.vb`, `DocumentDumper.vb`, or the diagnostics wiring | `node tools/proto/boxtree.mjs` | `39/39 checks passed` |
+| `Engine/Native/{Style,UserAgent,BoxTree}*.vb`, `DocumentDumper.vb`, or the diagnostics wiring | `node tools/proto/boxtree.mjs` | `48/48 checks passed` |
 | UA table / settings | `node tools/proto/useragents.mjs` | `0 failure(s)` |
 | Tracker blocklist | `node tools/proto/trackerblock.mjs` | `0 failure(s)` |
 | Lite defaults / caps / resources | `node tools/proto/lightweight.mjs` | `0 failure(s)` |
 | Shim delivery / redirect rules | `node tools/proto/modern-sites.mjs` | `0 failure(s)` |
 | Picker/tab re-entrancy, sln registration | `node tools/proto/shell-guards.mjs` | `0 failure(s)` |
 | `RemoteServers.vb`, the settings fields it reads, or anything that chooses WHERE to render | `node tools/proto/remote-servers.mjs` | `19/19 checks passed`. The old `textmeasure.mjs` / `boxlayout.mjs` rows were deleted with the on-device renderer |
-| `EngineChoice.vb`, or anything that selects an engine or falls back automatically | `node tools/proto/engine-choice.mjs` | `21/21 checks passed` |
+| `EngineChoice.vb`, or anything that selects an engine or falls back automatically | `node tools/proto/engine-choice.mjs` | `23/23 checks passed` |
+| Any claim about the remote engine's wire format, header, frame splitter or sealed frames | `node tools/proto/remote-protocol.mjs` | `91/91 checks passed`, byte-for-byte against the vectors the SERVER's own code emitted |
 | `CompatibilityProbe.vb` / any probe verdict | `node tools/proto/probe-verdict.mjs` | `9/9 checks passed` |
 | Any claim about re-configuring Trident | `node tools/proto/ie-adapt.mjs` | `9/9 checks passed` |
 | Any claim about leaving the AppContainer, or about getting JIT memory | `node tools/proto/sandbox-escape.mjs` | `15/15 checks passed` |
@@ -316,8 +317,14 @@ tools/proto/*.mjs             ← runnable prototypes and logic mirrors
 tools/make_logo.py            ← regenerates every image asset
 tools/proto/remote-servers.mjs← primary/secondary order, url normalisation (referee)
 tools/proto/engine-choice.mjs ← which engine renders, and when it may fall back
-BrowserForWP/Engine/NativeEngine.vb ← this repository's own engine, behind the
-                                 same IBrowserEngine seam as the WebView
+BrowserForWP/Engine/RemoteEngine.vb ← the remote engine: walks the two servers,
+                                 owns the connection, and raises Navigated/Audio
+BrowserForWP/Engine/RemoteChannel.vb ← one connection: handshake, sealed frames,
+                                 read loop, frame acknowledgement
+BrowserForWP/Rendering/RemoteScreen.vb ← the Canvas of JPEG tiles, plus tap,
+                                 scroll and soft-keyboard forwarding. NO handset
+                                 has ever run one line of it (see the empty
+                                 verification table in docs/MAINTAINING.md)
 tools/check-vb.mjs            ← 17 categories / 16 check groups of static
                                  VB/XAML/project/resw/theme-key/flavour/
                                  import/name-legality/doc-comment checks
@@ -460,7 +467,10 @@ Same loop, but the diagnosis comes first.
 
 ## Things that will get a change rejected
 
-- Claiming a Chromium or Firefox engine works on WP8.1.
+- Claiming a Chromium or Firefox engine works on WP8.1. It still does not: the
+  remote engine draws with Chromium **on somebody else's machine**, which is a
+  different browser with a different owner, not this one with a bigger engine
+  (`docs/ARCHITECTURE.md` Law 5).
 - Claiming the system `WebView` uses TLS 1.3.
 - A local loopback proxy feeding the `WebView` (AppContainers block
   `127.0.0.1`).
